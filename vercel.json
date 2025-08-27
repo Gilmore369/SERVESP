@@ -1,0 +1,17 @@
+{
+  "buildCommand": "cd serves-platform && npm run build:vercel",
+  "outputDirectory": "serves-platform/.next",
+  "installCommand": "cd serves-platform && npm install",
+  "framework": "nextjs",
+  "functions": {
+    "serves-platform/src/app/api/**/*.ts": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/serves-platform/$1"
+    }
+  ]
+}
