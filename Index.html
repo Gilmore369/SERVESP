@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ConstructPro - Gestión de Proyectos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      .sidebar {
+        transition: all 0.3s ease;
+      }
+      .notification-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        font-size: 10px;
+        background-color: #ef4444;
+      }
+      .chart-container {
+        height: 300px;
+      }
+      .project-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+      .task-progress {
+        height: 6px;
+      }
+      @media (max-width: 768px) {
+        .sidebar {
+          position: fixed;
+          left: -100%;
+          z-index: 50;
+        }
+        .sidebar.active {
+          left: 0;
+        }
+        .overlay {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          z-index: 40;
+        }
+        .overlay.active {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div class="flex h-screen overflow-hidden">
+      <!-- Sidebar -->
+      <div class="sidebar bg-blue-800 text-white w-64 flex-shrink-0">
+        <div
+          class="p-4 flex items-center justify-between border-b border-blue-700"
+        >
+          <div class="flex items-center">
+            <i class="fas fa-hard-hat text-2xl mr-2"></i>
+            <span class="text-xl font-bold">ConstructPro</span>
+          </div>
+          <button id="closeSidebar" class="md:hidden">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="p-4">
+          <div class="mb-6">
+            <div class="flex items-center mb-2">
+              <div
+                class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center mr-3"
+              >
+                <i class="fas fa-user"></i>
+              </div>
+              <div>
+                <div class="font-medium">Admin Líder</div>
+                <div class="text-xs text-blue-200">admin@constructpro.com</div>
+              </div>
+            </div>
+          </div>
+
+          <nav>
+            <div class="mb-4">
+              <div class="text-xs uppercase text-blue-300 font-bold mb-2">
+                Principal
+              </div>
+              <a href="#" class="block py-2 px-3 rounded bg-blue-700 mb-1">
+                <i class="fas fa-home mr-2"></i> Dashboard
+              </a>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-project-diagram mr-2"></i> Proyectos
+              </a>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-users mr-2"></i> Personal
+              </a>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-chart-line mr-2"></i> Reportes
+              </a>
+            </div>
+
+            <div class="mb-4">
+              <div class="text-xs uppercase text-blue-300 font-bold mb-2">
+                Administración
+              </div>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-user-cog mr-2"></i> Gestión de Usuarios
+              </a>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-cog mr-2"></i> Configuración
+              </a>
+              <a
+                href="#"
+                class="block py-2 px-3 rounded hover:bg-blue-700 mb-1"
+              >
+                <i class="fas fa-file-alt mr-2"></i> Documentación
+              </a>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Mobile overlay -->
+      <div class="overlay"></div>
+
+      <!-- Main content -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <!-- Top navbar -->
+        <header class="bg-white shadow-sm">
+          <div class="flex items-center justify-between px-4 py-3">
+            <div class="flex items-center">
+              <button id="toggleSidebar" class="md:hidden mr-4">
+                <i class="fas fa-bars text-gray-600"></i>
+              </button>
+              <h1 class="text-xl font-semibold text-gray-800">Dashboard</h1>
+            </div>
+
+            <div class="flex items-center space-x-4">
+              <div class="relative">
+                <button class="p-2 rounded-full hover:bg-gray-100">
+                  <i class="fas fa-bell text-gray-600"></i>
+                  <span
+                    class="notification-badge rounded-full w-5 h-5 flex items-center justify-center text-white"
+                    >3</span
+                  >
+                </button>
+              </div>
+              <div class="relative">
+                <button class="p-2 rounded-full hover:bg-gray-100">
+                  <i class="fas fa-envelope text-gray-600"></i>
+                  <span
+                    class="notification-badge rounded-full w-5 h-5 flex items-center justify-center text-white"
+                    >5</span
+                  >
+                </button>
+              </div>
+              <div class="border-l border-gray-200 h-8 mx-2"></div>
+              <button class="flex items-center space-x-2">
+                <div
+                  class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white"
+                >
+                  <i class="fas fa-user"></i>
+                </div>
+                <span class="hidden md:inline font-medium">Admin Líder</span>
+                <i
+                  class="fas fa-chevron-down text-gray-500 hidden md:inline"
+                ></i>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Main content area -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-6">
+          <!-- Stats cards -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+          >
+            <div class="bg-white rounded-lg shadow p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-gray-500 text-sm">Proyectos Activos</p>
+                  <p class="text-2xl font-bold">12</p>
+                </div>
+                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                  <i class="fas fa-project-diagram"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-green-600">
+                <i class="fas fa-arrow-up mr-1"></i> 2 nuevos esta semana
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-gray-500 text-sm">Personal Activo</p>
+                  <p class="text-2xl font-bold">48</p>
+                </div>
+                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                  <i class="fas fa-users"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-red-600">
+                <i class="fas fa-arrow-down mr-1"></i> 3 menos que ayer
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-gray-500 text-sm">Tareas Pendientes</p>
+                  <p class="text-2xl font-bold">27</p>
+                </div>
+                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                  <i class="fas fa-tasks"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-green-600">
+                <i class="fas fa-arrow-down mr-1"></i> 5 completadas hoy
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-gray-500 text-sm">Presupuesto Restante</p>
+                  <p class="text-2xl font-bold">$245,670</p>
+                </div>
+                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                  <i class="fas fa-dollar-sign"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-gray-500">
+                78% del presupuesto total
+              </div>
+            </div>
+          </div>
+
+          <!-- Projects section -->
+          <div class="bg-white rounded-lg shadow mb-6">
+            <div
+              class="p-4 border-b border-gray-200 flex justify-between items-center"
+            >
+              <h2 class="text-lg font-semibold">Proyectos Recientes</h2>
+              <button
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+              >
+                <i class="fas fa-plus mr-1"></i> Nuevo Proyecto
+              </button>
+            </div>
+            <div class="p-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Project card 1 -->
+                <div
+                  class="project-card bg-white border border-gray-200 rounded-lg overflow-hidden transition duration-300"
+                >
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <h3 class="font-semibold text-lg">
+                        Torre Residencial A1
+                      </h3>
+                      <span
+                        class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded"
+                        >En progreso</span
+                      >
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4">
+                      Construcción de torre residencial de 20 pisos en zona
+                      norte
+                    </p>
+
+                    <div class="mb-3">
+                      <div
+                        class="flex justify-between text-xs text-gray-500 mb-1"
+                      >
+                        <span>Progreso</span>
+                        <span>65%</span>
+                      </div>
+                      <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          class="bg-blue-600 h-2 rounded-full"
+                          style="width: 65%"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div class="flex justify-between text-sm">
+                      <div>
+                        <p class="text-gray-500">Inicio</p>
+                        <p>15/03/2023</p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Fin</p>
+                        <p>30/11/2023</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="bg-gray-50 px-4 py-3 flex justify-between items-center"
+                  >
+                    <div class="flex -space-x-2">
+                      <img
+                        class="w-8 h-8 rounded-full border-2 border-white"
+                        src="https://randomuser.me/api/portraits/men/32.jpg"
+                        alt=""
+                      />
+                      <img
+                        class="w-8 h-8 rounded-full border-2 border-white"
+                        src="https://randomuser.me/api/portraits/women/44.jpg"
+                        alt=""
+                      />
+                      <div
+                        class="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-xs"
+                      >
+                        +5
+                      </div>
+                    </div>
+                    <button
+                      class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Ver detalles
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Project card 2 -->
+                <div
+                  class="project-card bg-white border border-gray-200 rounded-lg overflow-hidden transition duration-300"
+                >
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <h3 class="font-semibold text-lg">
+                        Centro Comercial Plaza
+                      </h3>
+                      <span
+                        class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded"
+                        >Planificación</span
+                      >
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4">
+                      Remodelación de centro comercial con 120 locales
+                      comerciales
+                    </p>
+
+                    <div class="mb-3">
+                      <div
+                        class="flex justify-between text-xs text-gray-500 mb-1"
+                      >
+                        <span>Progreso</span>
+                        <span>15%</span>
+                      </div>
+                      <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          class="bg-yellow-500 h-2 rounded-full"
+                          style="width: 15%"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div class="flex justify-between text-sm">
+                      <div>
+                        <p class="text-gray-500">Inicio</p>
+                        <p>01/06/2023</p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Fin</p>
+                        <p>15/12/2023</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="bg-gray-50 px-4 py-3 flex justify-between items-center"
+                  >
+                    <div class="flex -space-x-2">
+                      <img
+                        class="w-8 h-8 rounded-full border-2 border-white"
+                        src="https://randomuser.me/api/portraits/men/75.jpg"
+                        alt=""
+                      />
+                      <img
+                        class="w-8 h-8 rounded-full border-2 border-white"
+                        src="https://randomuser.me/api/portraits/women/63.jpg"
+                        alt=""
+                      />
+                    </div>
+                    <button
+                      class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Ver detalles
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Project card 3 -->
+                <div
+                  class="project-card bg-white border border-gray-200 rounded-lg overflow-hidden transition duration-300"
+                >
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <h3 class="font-semibold text-lg">Puente Vial Este</h3>
+                      <span
+                        class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
+                        >Diseño</span
+                      >
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4">
+                      Construcción de puente vehicular de 150m sobre río
+                    </p>
+
+                    <div class="mb-3">
+                      <div
+                        class="flex justify-between text-xs text-gray-500 mb-1"
+                      >
+                        <span>Progreso</span>
+                        <span>30%</span>
+                      </div>
+                      <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          class="bg-blue-400 h-2 rounded-full"
+                          style="width: 30%"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div class="flex justify-between text-sm">
+                      <div>
+                        <p class="text-gray-500">Inicio</p>
+                        <p>10/05/2023</p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Fin</p>
+                        <p>30/09/2023</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="bg-gray-50 px-4 py-3 flex justify-between items-center"
+                  >
+                    <div class="flex -space-x-2">
+                      <img
+                        class="w-8 h-8 rounded-full border-2 border-white"
+                        src="https://randomuser.me/api/portraits/men/12.jpg"
+                        alt=""
+                      />
+                      <div
+                        class="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-xs"
+                      >
+                        +3
+                      </div>
+                    </div>
+                    <button
+                      class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Ver detalles
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tasks and timeline -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Recent tasks -->
+            <div class="bg-white rounded-lg shadow col-span-1">
+              <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold">Tareas Pendientes</h2>
+              </div>
+              <div class="p-4">
+                <div class="space-y-4">
+                  <!-- Task 1 -->
+                  <div class="border-l-4 border-blue-500 pl-3 py-1">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <h3 class="font-medium">
+                          Aprobación de planos eléctricos
+                        </h3>
+                        <p class="text-sm text-gray-600">
+                          Torre Residencial A1
+                        </p>
+                      </div>
+                      <span
+                        class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"
+                        >Alta</span
+                      >
+                    </div>
+                    <div class="mt-2 flex items-center justify-between">
+                      <div class="flex items-center text-xs text-gray-500">
+                        <i class="far fa-clock mr-1"></i>
+                        <span>Vence: Hoy</span>
+                      </div>
+                      <button class="text-xs text-blue-600 hover:text-blue-800">
+                        Completar
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Task 2 -->
+                  <div class="border-l-4 border-yellow-500 pl-3 py-1">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <h3 class="font-medium">Cotización materiales</h3>
+                        <p class="text-sm text-gray-600">
+                          Centro Comercial Plaza
+                        </p>
+                      </div>
+                      <span
+                        class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded"
+                        >Media</span
+                      >
+                    </div>
+                    <div class="mt-2 flex items-center justify-between">
+                      <div class="flex items-center text-xs text-gray-500">
+                        <i class="far fa-clock mr-1"></i>
+                        <span>Vence: 15/06</span>
+                      </div>
+                      <button class="text-xs text-blue-600 hover:text-blue-800">
+                        Completar
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Task 3 -->
+                  <div class="border-l-4 border-green-500 pl-3 py-1">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <h3 class="font-medium">Revisión de cimentación</h3>
+                        <p class="text-sm text-gray-600">Puente Vial Este</p>
+                      </div>
+                      <span
+                        class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded"
+                        >Baja</span
+                      >
+                    </div>
+                    <div class="mt-2 flex items-center justify-between">
+                      <div class="flex items-center text-xs text-gray-500">
+                        <i class="far fa-clock mr-1"></i>
+                        <span>Vence: 20/06</span>
+                      </div>
+                      <button class="text-xs text-blue-600 hover:text-blue-800">
+                        Completar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  class="mt-4 w-full py-2 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400"
+                >
+                  <i class="fas fa-plus mr-1"></i> Agregar Tarea
+                </button>
+              </div>
+            </div>
+
+            <!-- Team availability -->
+            <div class="bg-white rounded-lg shadow col-span-1">
+              <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold">Disponibilidad del Equipo</h2>
+              </div>
+              <div class="p-4">
+                <div class="space-y-4">
+                  <!-- Team member 1 -->
+                  <div class="flex items-center">
+                    <img
+                      class="w-10 h-10 rounded-full mr-3"
+                      src="https://randomuser.me/api/portraits/men/41.jpg"
+                      alt=""
+                    />
+                    <div class="flex-1">
+                      <h3 class="font-medium">Juan Pérez</h3>
+                      <p class="text-sm text-gray-600">Maestro de obra</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium">Disponible</p>
+                      <p class="text-xs text-gray-500">Desde 08:00</p>
+                    </div>
+                  </div>
+
+                  <!-- Team member 2 -->
+                  <div class="flex items-center">
+                    <img
+                      class="w-10 h-10 rounded-full mr-3"
+                      src="https://randomuser.me/api/portraits/women/63.jpg"
+                      alt=""
+                    />
+                    <div class="flex-1">
+                      <h3 class="font-medium">María Gómez</h3>
+                      <p class="text-sm text-gray-600">Arquitecta</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-yellow-600">
+                        En reunión
+                      </p>
+                      <p class="text-xs text-gray-500">Hasta 11:30</p>
+                    </div>
+                  </div>
+
+                  <!-- Team member 3 -->
+                  <div class="flex items-center">
+                    <img
+                      class="w-10 h-10 rounded-full mr-3"
+                      src="https://randomuser.me/api/portraits/men/32.jpg"
+                      alt=""
+                    />
+                    <div class="flex-1">
+                      <h3 class="font-medium">Carlos Rojas</h3>
+                      <p class="text-sm text-gray-600">Ing. Civil</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium">Disponible</p>
+                      <p class="text-xs text-gray-500">Desde 09:00</p>
+                    </div>
+                  </div>
+
+                  <!-- Team member 4 -->
+                  <div class="flex items-center">
+                    <img
+                      class="w-10 h-10 rounded-full mr-3"
+                      src="https://randomuser.me/api/portraits/women/44.jpg"
+                      alt=""
+                    />
+                    <div class="flex-1">
+                      <h3 class="font-medium">Ana López</h3>
+                      <p class="text-sm text-gray-600">Ing. Eléctrica</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-red-600">En obra</p>
+                      <p class="text-xs text-gray-500">Todo el día</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  class="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  <i class="fas fa-users mr-1"></i> Ver Todo el Personal
+                </button>
+              </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="bg-white rounded-lg shadow col-span-1">
+              <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold">Cronograma</h2>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <span class="text-lg font-bold">Junio 2023</span>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button class="p-1 rounded hover:bg-gray-100">
+                      <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="p-1 rounded hover:bg-gray-100">
+                      <i class="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <!-- Event 1 -->
+                  <div class="flex">
+                    <div class="flex-shrink-0 mr-3">
+                      <div
+                        class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"
+                      >
+                        <i class="fas fa-calendar-day"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 class="font-medium">Revisión de avances</h3>
+                      <p class="text-sm text-gray-600">Torre Residencial A1</p>
+                      <p class="text-xs text-gray-500 mt-1">
+                        <i class="far fa-clock mr-1"></i> 10:00 - 12:00
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Event 2 -->
+                  <div class="flex">
+                    <div class="flex-shrink-0 mr-3">
+                      <div
+                        class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center"
+                      >
+                        <i class="fas fa-truck"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 class="font-medium">Llegada de materiales</h3>
+                      <p class="text-sm text-gray-600">
+                        Centro Comercial Plaza
+                      </p>
+                      <p class="text-xs text-gray-500 mt-1">
+                        <i class="far fa-clock mr-1"></i> 08:00 - 10:00
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Event 3 -->
+                  <div class="flex">
+                    <div class="flex-shrink-0 mr-3">
+                      <div
+                        class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center"
+                      >
+                        <i class="fas fa-hard-hat"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 class="font-medium">Inspección de seguridad</h3>
+                      <p class="text-sm text-gray-600">Puente Vial Este</p>
+                      <p class="text-xs text-gray-500 mt-1">
+                        <i class="far fa-clock mr-1"></i> 14:00 - 15:30
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  class="mt-4 w-full py-2 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400"
+                >
+                  <i class="fas fa-plus mr-1"></i> Agregar Evento
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      // Toggle sidebar on mobile
+      document
+        .getElementById("toggleSidebar")
+        .addEventListener("click", function () {
+          document.querySelector(".sidebar").classList.add("active");
+          document.querySelector(".overlay").classList.add("active");
+        });
+
+      document
+        .getElementById("closeSidebar")
+        .addEventListener("click", function () {
+          document.querySelector(".sidebar").classList.remove("active");
+          document.querySelector(".overlay").classList.remove("active");
+        });
+
+      document.querySelector(".overlay").addEventListener("click", function () {
+        document.querySelector(".sidebar").classList.remove("active");
+        this.classList.remove("active");
+      });
+
+      // Simulate real-time notifications
+      setInterval(function () {
+        const badges = document.querySelectorAll(".notification-badge");
+        badges.forEach((badge) => {
+          const currentCount = parseInt(badge.textContent);
+          if (currentCount < 10) {
+            badge.textContent = currentCount + 1;
+          }
+        });
+      }, 15000);
+    </script>
+  </body>
+</html>

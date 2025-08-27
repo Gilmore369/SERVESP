@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Apps Script API Verification</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Google Apps Script API Verification</h1>
+    
+    <div class="info">
+        <h3>Configuration</h3>
+        <p><strong>API URL:</strong> https://script.google.com/macros/s/AKfycbwZ4fWws4N-4BL8f1dmG6tBVbo8KEfcS3e1U6MPSSLSYv2GZaXNdhsb9B6BpzDechnAyw/exec</p>
+        <p><strong>API Token:</strong> demo-token-2024</p>
+    </div>
+
+    <div>
+        <button onclick="testBasicConnection()">Test Basic Connection</button>
+        <button onclick="testMaterialsList()">Test Materials List</button>
+        <button onclick="testAuthentication()">Test Authentication</button>
+        <button onclick="testWhoAmI()">Test WhoAmI</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwZ4fWws4N-4BL8f1dmG6tBVbo8KEfcS3e1U6MPSSLSYv2GZaXNdhsb9B6BpzDechnAyw/exec';
+        const API_TOKEN = 'demo-token-2024';
+
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function makeRequest(params) {
+            const url = new URL(API_URL);
+            Object.keys(params).forEach(key => {
+                if (params[key] !== undefined && params[key] !== null) {
+                    url.searchParams.append(key, typeof params[key] === 'object' ? JSON.stringify(params[key]) : params[key]);
+                }
+            });
+
+            try {
+                const response = await fetch(url.toString(), {
+                    method: 'GET',
+                    mode: 'cors',
+                });
+
+                const data = await response.json();
+                return { response, data };
+            } catch (error) {
+                throw new Error(`Network error: ${error.message}`);
+            }
+        }
+
+        async function testBasicConnection() {
+            addResult('Testing basic connection...', 'info');
+            
+            try {
+                const { response, data } = await makeRequest({
+                    token: API_TOKEN,
+                    action: 'test'
+                });
+
+                addResult(`<strong>Response Status:</strong> ${response.status}`, response.ok ? 'success' : 'error');
+                addResult(`<strong>Response Data:</strong><pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                
+                if (data.ok === false) {
+                    addResult(`<strong>API Error:</strong> ${data.message}`, 'error');
+                } else {
+                    addResult('Basic connection successful!', 'success');
+                }
+            } catch (error) {
+                addResult(`<strong>Connection Error:</strong> ${error.message}`, 'error');
+            }
+        }
+
+        async function testMaterialsList() {
+            addResult('Testing materials list...', 'info');
+            
+            try {
+                const { response, data } = await makeRequest({
+                    token: API_TOKEN,
+                    action: 'crud',
+                    table: 'Materiales',
+                    operation: 'list'
+                });
+
+                addResult(`<strong>Response Status:</strong> ${response.status}`, response.ok ? 'success' : 'error');
+                addResult(`<strong>Response Data:</strong><pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                
+                if (data.ok === false) {
+                    addResult(`<strong>Materials Error:</strong> ${data.message}`, 'error');
+                } else if (data.data && Array.isArray(data.data)) {
+                    addResult(`Materials list retrieved successfully! Found ${data.data.length} materials.`, 'success');
+                } else {
+                    addResult('Materials list format unexpected', 'error');
+                }
+            } catch (error) {
+                addResult(`<strong>Materials Error:</strong> ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuthentication() {
+            addResult('Testing authentication...', 'info');
+            
+            try {
+                const { response, data } = await makeRequest({
+                    token: API_TOKEN,
+                    action: 'auth',
+                    email: 'admin@servesplatform.com',
+                    password: 'admin123'
+                });
+
+                addResult(`<strong>Response Status:</strong> ${response.status}`, response.ok ? 'success' : 'error');
+                addResult(`<strong>Response Data:</strong><pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                
+                if (data.ok === false) {
+                    addResult(`<strong>Auth Error:</strong> ${data.message}`, 'error');
+                } else {
+                    addResult('Authentication successful!', 'success');
+                }
+            } catch (error) {
+                addResult(`<strong>Auth Error:</strong> ${error.message}`, 'error');
+            }
+        }
+
+        async function testWhoAmI() {
+            addResult('Testing whoami...', 'info');
+            
+            try {
+                const { response, data } = await makeRequest({
+                    token: API_TOKEN,
+                    action: 'whoami'
+                });
+
+                addResult(`<strong>Response Status:</strong> ${response.status}`, response.ok ? 'success' : 'error');
+                addResult(`<strong>Response Data:</strong><pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                
+                if (data.ok === false) {
+                    addResult(`<strong>WhoAmI Error:</strong> ${data.message}`, 'error');
+                } else {
+                    addResult('WhoAmI successful!', 'success');
+                }
+            } catch (error) {
+                addResult(`<strong>WhoAmI Error:</strong> ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run basic connection test on page load
+        window.onload = function() {
+            addResult('Page loaded. Ready to test Google Apps Script API.', 'info');
+        };
+    </script>
+</body>
+</html>

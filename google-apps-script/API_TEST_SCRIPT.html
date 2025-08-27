@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ServesPlatform API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .loading { background-color: #fff3cd; border-color: #ffeaa7; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .test-url { font-family: monospace; background-color: #f8f9fa; padding: 5px; border-radius: 3px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>ServesPlatform API Test Suite</h1>
+    <p>This page tests the Google Apps Script API endpoints to verify they're working correctly.</p>
+    
+    <div class="test-section">
+        <h3>Configuration</h3>
+        <p><strong>API Base URL:</strong> <span id="apiUrl" class="test-url">https://script.google.com/macros/s/AKfycbwZ4fWws4N-4BL8f1dmG6tBVbo8KEfcS3e1U6MPSSLSYv2GZaXNdhsb9B6BpzDechnAyw/exec</span></p>
+        <p><strong>API Token:</strong> <span class="test-url">demo-token-2024</span></p>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="test1" class="test-section">
+        <h3>Test 1: User Info (whoami)</h3>
+        <button onclick="testWhoAmI()">Test whoami Endpoint</button>
+        <div id="result1"></div>
+    </div>
+
+    <div id="test2" class="test-section">
+        <h3>Test 2: Materials List (CRITICAL)</h3>
+        <button onclick="testMaterialsList()">Test Materials List</button>
+        <div id="result2"></div>
+    </div>
+
+    <div id="test3" class="test-section">
+        <h3>Test 3: Authentication</h3>
+        <button onclick="testAuth()">Test Authentication</button>
+        <div id="result3"></div>
+    </div>
+
+    <div id="test4" class="test-section">
+        <h3>Test 4: Invalid Token (Error Handling)</h3>
+        <button onclick="testInvalidToken()">Test Invalid Token</button>
+        <div id="result4"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwZ4fWws4N-4BL8f1dmG6tBVbo8KEfcS3e1U6MPSSLSYv2GZaXNdhsb9B6BpzDechnAyw/exec';
+        const API_TOKEN = 'demo-token-2024';
+
+        function setTestStatus(testId, status, message, data = null) {
+            const element = document.getElementById(`result${testId}`);
+            const section = document.getElementById(`test${testId}`);
+            
+            section.className = `test-section ${status}`;
+            
+            let html = `<p><strong>Status:</strong> ${message}</p>`;
+            if (data) {
+                html += `<p><strong>Response:</strong></p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            element.innerHTML = html;
+        }
+
+        async function makeAPICall(params) {
+            const url = new URL(API_BASE_URL);
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            
+            console.log('Making API call to:', url.toString());
+            
+            try {
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                return { success: true, data, status: response.status };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function testWhoAmI() {
+            setTestStatus(1, 'loading', 'Testing whoami endpoint...');
+            
+            const result = await makeAPICall({
+                token: API_TOKEN,
+                action: 'whoami'
+            });
+
+            if (result.success && result.data.ok) {
+                setTestStatus(1, 'success', 'whoami endpoint working correctly!', result.data);
+            } else {
+                setTestStatus(1, 'error', 'whoami endpoint failed', result.data || result.error);
+            }
+        }
+
+        async function testMaterialsList() {
+            setTestStatus(2, 'loading', 'Testing materials list endpoint...');
+            
+            const result = await makeAPICall({
+                token: API_TOKEN,
+                action: 'crud',
+                operation: 'list',
+                table: 'Materials'
+            });
+
+            if (result.success && result.data.ok && Array.isArray(result.data.data)) {
+                const materialsCount = result.data.data.length;
+                setTestStatus(2, 'success', `Materials list working! Found ${materialsCount} materials.`, result.data);
+            } else {
+                setTestStatus(2, 'error', 'Materials list failed - this is the critical issue!', result.data || result.error);
+            }
+        }
+
+        async function testAuth() {
+            setTestStatus(3, 'loading', 'Testing authentication endpoint...');
+            
+            const result = await makeAPICall({
+                token: API_TOKEN,
+                action: 'auth',
+                email: 'admin@servesplatform.com',
+                password: 'admin123'
+            });
+
+            if (result.success && result.data.ok && result.data.data.token) {
+                setTestStatus(3, 'success', 'Authentication working correctly!', result.data);
+            } else {
+                setTestStatus(3, 'error', 'Authentication failed', result.data || result.error);
+            }
+        }
+
+        async function testInvalidToken() {
+            setTestStatus(4, 'loading', 'Testing error handling with invalid token...');
+            
+            const result = await makeAPICall({
+                token: 'invalid-token',
+                action: 'whoami'
+            });
+
+            if (result.success && !result.data.ok && result.data.status === 401) {
+                setTestStatus(4, 'success', 'Error handling working correctly! Invalid token properly rejected.', result.data);
+            } else {
+                setTestStatus(4, 'error', 'Error handling not working as expected', result.data || result.error);
+            }
+        }
+
+        async function runAllTests() {
+            console.log('Running all API tests...');
+            await testWhoAmI();
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between tests
+            await testMaterialsList();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testAuth();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testInvalidToken();
+            console.log('All tests completed!');
+        }
+
+        function clearResults() {
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`result${i}`).innerHTML = '';
+                document.getElementById(`test${i}`).className = 'test-section';
+            }
+        }
+
+        // Auto-run tests when page loads
+        window.addEventListener('load', () => {
+            console.log('API Test Suite loaded. Click "Run All Tests" to start testing.');
+        });
+    </script>
+</body>
+</html>
