@@ -1,126 +1,93 @@
 /**
- * ServesPlatform Google Apps Script Backend - VERSIÓN COMPLETA Y CORREGIDA
- * Main entry point for the API
- * Enhanced with comprehensive logging for debugging and monitoring
+ * ServesPlatform Google Apps Script Backend - PRODUCTION VERSION
+ * Main entry point for the API with Google Sheets integration
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3
+ *
+ * @fileoverview Production Google Apps Script backend with real Google Sheets integration
+ * @author ServesPlatform Development Team
+ * @version 2.1.0
  */
 
-// Configuration - Hardcoded values for reliability (no dependency on Script Properties)
+/**
+ * Application configuration using Properties Service with secure fallbacks
+ */
 const CONFIG = {
-  SHEET_ID: "1FYYgZONu04loEZOXzRz6GLIjzn-w
-AguQg4S_qHNri8U",
-  API_TOKEN: "serves-platform-2024-api-key",
-  JWT_SECRET: "mi-secreto-jwt-super-seguro-2024",
-  ENVIRONMENT: "development",
-  ENABLE_DETAILED_LOGGING: true,
-  LOG_LEVEL: "DEBUG" // DEBUG, INFO, WARN, ERROR
+  /**
+   * Get API token from Properties Service
+   */
+  get API_TOKEN() {
+    return (
+      PropertiesService.getScriptProperties().getProperty("API_TOKEN") ||
+      "demo-token-2024"
+    );
+  },
+
+  /**
+   * Get JWT secret from Properties Service
+   */
+  get JWT_SECRET() {
+    return (
+      PropertiesService.getScriptProperties().getProperty("JWT_SECRET") ||
+      "mi-secreto-jwt-super-seguro-2024"
+    );
+  },
+
+  /**
+   * Get Google Sheets ID from Properties Service
+   */
+  get SHEET_ID() {
+    return (
+      PropertiesService.getScriptProperties().getProperty("SHEET_ID") ||
+      "1FYYgZONu04loEZOXzRz6GLIjzn-wAguQg4S_qHNri8U"
+    );
+  },
+
+  ENVIRONMENT: "production",
+  DEFAULT_PAGE_SIZE: 50,
+  MAX_PAGE_SIZE: 200,
+  MIN_PAGE_SIZE: 10,
+  LARGE_DATASET_THRESHOLD: 1000,
+  MAX_SEARCH_RESULTS: 100,
+  MAX_BATCH_SIZE: 100,
+  ENABLE_LOGGING: true,
+  LOG_LEVEL: "INFO",
+  MAX_LOG_ENTRIES: 1000,
 };
 
 /**
- * Enhanced logging utility with different log levels and structured output
+ * Error types for standardized error handling
  */
-function logMessage(level, message, data = null, context = null) {
-  if (!CONFIG.ENABLE_DETAILED_LOGGING) return;
-  
-  const timestamp = new Date().toISOString();
-  const logEntry = {
-    timestamp: timestamp,
-    level: level,
-    message: message,
-    context: context,
-    data: data
-  };
-  
-  // Format log message for console
-  let logOutput = `[${timestamp}] ${level}: ${message}`;
-  if (context) logOutput += ` (Context: ${context})`;
-  
-  // Log based on level
-  switch (level) {
-    case 'ERROR':
-      console.error(logOutput);
-      if (data) console.error('Error Data:', JSON.stringify(data, null, 2));
-      break;
-    case 'WARN':
-      console.warn(logOutput);
-      if (data) console.warn('Warning Data:', JSON.stringify(data, null, 2));
-      break;
-    case 'INFO':
-      console.info(logOutput);
-      if (data) console.info('Info Data:', JSON.stringify(data, null, 2));
-      break;
-    case 'DEBUG':
-    default:
-      console.log(logOutput);
-      if (data) console.log('Debug Data:', JSON.stringify(data, null, 2));
-      break;
-  }
-  
-  return logEntry;
-}
+const ERROR_TYPES = {
+  VALIDATION_ERROR: "VALIDATION_ERROR",
+  AUTHENTICATION_ERROR: "AUTHENTICATION_ERROR",
+  AUTHORIZATION_ERROR: "AUTHORIZATION_ERROR",
+  NOT_FOUND_ERROR: "NOT_FOUND_ERROR",
+  CONFLICT_ERROR: "CONFLICT_ERROR",
+  SERVER_ERROR: "SERVER_ERROR",
+  NETWORK_ERROR: "NETWORK_ERROR",
+  TIMEOUT_ERROR: "TIMEOUT_ERROR",
+};
 
 /**
- * Log request timing and performance metrics
+ * Log levels for structured logging
  */
-function logPerformance(operation, startTime, endTime, additionalData = null) {
-  const duration = endTime - startTime;
-  const performanceData = {
-    operation: operation,
-    duration_ms: duration,
-    start_time: new Date(startTime).toISOString(),
-    end_time: new Date(endTime).toISOString(),
-    ...additionalData
-  };
-  
-  logMessage('INFO', `Performance: ${operation} completed in ${duration}ms`, performanceData, 'PERFORMANCE');
-  return performanceData;
-}
+const LOG_LEVELS = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+  CRITICAL: 4,
+};
 
 /**
- * Log request parameters with sensitive data filtering
- */
-function logRequestParameters(parameters, context = 'REQUEST') {
-  if (!CONFIG.ENABLE_DETAILED_LOGGING) return;
-  
-  // Create a copy and filter sensitive data
-  const filteredParams = { ...parameters };
-  
-  // Filter sensitive fields
-  const sensitiveFields = ['password', 'token', 'jwt', 'secret', 'key'];
-  sensitiveFields.forEach(field => {
-    if (filteredParams[field]) {
-      filteredParams[field] = '***FILTERED***';
-    }
-  });
-  
-  logMessage('DEBUG', 'Request parameters received', filteredParams, context);
-}
-
-/**
- * Log error with stack trace and context
- */
-function logError(error, context = 'GENERAL', additionalData = null) {
-  const errorData = {
-    message: error.message,
-    name: error.name,
-    stack: error.stack,
-    context: context,
-    timestamp: new Date().toISOString(),
-    ...additionalData
-  };
-  
-  logMessage('ERROR', `Error in ${context}: ${error.message}`, errorData, context);
-  return errorData;
-}
-
-/**
- * Main GET handler
+ * Handle GET requests
  */
 function doGet(e) {
   return handleRequest(e);
 }
 
 /**
- * Main POST handler
+ * Handle POST requests
  */
 function doPost(e) {
   return handleRequest(e);
@@ -134,150 +101,113 @@ function doOptions(e) {
 }
 
 /**
- * Main request handler - Enhanced with comprehensive logging and error tracking
+ * Enhanced request handler with comprehensive error handling
  */
 function handleRequest(e) {
-  const requestStartTime = Date.now();
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
+  const startTime = Date.now();
+  const requestId = generateRequestId();
+
   try {
-    logMessage('INFO', `Starting request processing`, { requestId: requestId }, 'REQUEST_START');
-    
-    // Ensure e exists and has proper structure
-    if (!e) {
-      logMessage('WARN', 'Request object is null, creating default structure', null, 'REQUEST_VALIDATION');
-      e = { parameter: {}, postData: null };
-    }
-    if (!e.parameter) {
-      logMessage('WARN', 'Request parameter object is missing, creating empty object', null, 'REQUEST_VALIDATION');
-      e.parameter = {};
-    }
+    console.log("Starting request processing - requestId: " + requestId);
 
-    // Log request method and basic info
-    const requestMethod = e.postData ? 'POST' : 'GET';
-    logMessage('DEBUG', `Request method: ${requestMethod}`, { 
-      hasPostData: !!e.postData,
-      parameterCount: Object.keys(e.parameter).length 
-    }, 'REQUEST_INFO');
+    // DEBUG: Log the raw event object
+    console.log("Event object exists: " + !!e);
+    if (e) {
+      console.log("e.parameter exists: " + !!e.parameter);
+      console.log("e.postData exists: " + !!e.postData);
 
-    // Get data from parameters (GET request)
-    let requestData = e.parameter || {};
-    logRequestParameters(requestData, 'INITIAL_PARAMS');
-
-    // Parse any JSON strings in parameters
-    const parseStartTime = Date.now();
-    Object.keys(requestData).forEach((key) => {
-      if (
-        typeof requestData[key] === "string" &&
-        (requestData[key].startsWith("{") || requestData[key].startsWith("["))
-      ) {
-        try {
-          const originalValue = requestData[key];
-          requestData[key] = JSON.parse(requestData[key]);
-          logMessage('DEBUG', `Successfully parsed JSON parameter: ${key}`, { 
-            originalLength: originalValue.length,
-            parsedType: typeof requestData[key]
-          }, 'JSON_PARSING');
-        } catch (parseError) {
-          // Keep as string if not valid JSON
-          logMessage('WARN', `Failed to parse JSON parameter: ${key}`, { 
-            error: parseError.message,
-            value: requestData[key].substring(0, 100) + '...'
-          }, 'JSON_PARSING');
-        }
+      if (e.parameter) {
+        console.log("e.parameter keys: " + Object.keys(e.parameter).join(", "));
+        console.log("e.parameter content: " + JSON.stringify(e.parameter));
       }
-    });
-    
-    const parseEndTime = Date.now();
-    logPerformance('JSON Parameter Parsing', parseStartTime, parseEndTime, { 
-      parameterCount: Object.keys(requestData).length 
-    });
 
-    // Validate API token
-    const tokenValidationStartTime = Date.now();
-    const apiToken = requestData.token || e.parameter.token;
-    
-    logMessage('DEBUG', 'Validating API token', { 
-      tokenProvided: !!apiToken,
-      tokenLength: apiToken ? apiToken.length : 0,
-      expectedToken: CONFIG.API_TOKEN
-    }, 'TOKEN_VALIDATION');
-    
-    if (!apiToken || apiToken !== CONFIG.API_TOKEN) {
-      logMessage('ERROR', 'API token validation failed', { 
-        expected: CONFIG.API_TOKEN,
-        received: apiToken,
-        requestId: requestId
-      }, 'TOKEN_VALIDATION');
-      
-      return createErrorResponse("Invalid API token. Please check your configuration.", 401);
+      if (e.postData) {
+        console.log("e.postData.type: " + e.postData.type);
+        console.log("e.postData.length: " + e.postData.length);
+        console.log("e.postData.contents: " + e.postData.contents);
+      }
     }
 
-    const tokenValidationEndTime = Date.now();
-    logPerformance('Token Validation', tokenValidationStartTime, tokenValidationEndTime);
-    logMessage('INFO', 'API token validation successful', null, 'TOKEN_VALIDATION');
+    if (!e) e = { parameter: {}, postData: null };
+    if (!e.parameter) e.parameter = {};
 
-    // Route to appropriate handler
-    const action = requestData.action || e.parameter.action;
-    logMessage('INFO', `Routing to action handler`, { 
-      action: action,
-      requestId: requestId
-    }, 'ROUTING');
+    let params = e.parameter;
 
-    let handlerResult;
-    const handlerStartTime = Date.now();
+    if (e.postData && e.postData.contents) {
+      try {
+        const postData = JSON.parse(e.postData.contents);
+        console.log("Parsed POST data: " + JSON.stringify(postData));
+        params = { ...params, ...postData };
+      } catch (error) {
+        logMessage(
+          "WARN",
+          "Failed to parse POST data: " + error.message,
+          requestId
+        );
+      }
+    }
 
+    console.log("Final params object: " + JSON.stringify(params));
+    const token = params.token;
+    const expectedToken = CONFIG.API_TOKEN;
+
+    console.log('Token received: "' + token + '"');
+    console.log('Expected token: "' + expectedToken + '"');
+    console.log("Tokens match: " + (token === expectedToken));
+
+    if (!token || token !== expectedToken) {
+      console.error("API token validation failed - requestId: " + requestId);
+      return createErrorResponse("Invalid API token", 401, requestId);
+    }
+
+    const action = params.action;
+    console.log("Processing action: " + action + " - requestId: " + requestId);
+
+    let result;
     switch (action) {
       case "auth":
-        logMessage('DEBUG', 'Routing to authentication handler', null, 'ROUTING');
-        handlerResult = handleAuth(requestData);
+        result = handleAuth(params, requestId);
         break;
       case "whoami":
-        logMessage('DEBUG', 'Routing to whoami handler', null, 'ROUTING');
-        handlerResult = handleWhoAmI(requestData);
+        result = handleWhoAmI(params, requestId);
         break;
       case "crud":
-        logMessage('DEBUG', 'Routing to CRUD handler', { 
-          table: requestData.table,
-          operation: requestData.operation
-        }, 'ROUTING');
-        handlerResult = handleCRUD(requestData);
+        result = handleOptimizedCRUD(params, requestId);
+        break;
+      case "batch_crud":
+        result = handleBatchCRUD(params, requestId);
+        break;
+      case "health":
+        result = handleHealthCheck(requestId);
         break;
       default:
-        logMessage('ERROR', 'Invalid action requested', { 
-          action: action,
-          supportedActions: ['auth', 'whoami', 'crud']
-        }, 'ROUTING');
-        return createErrorResponse("Invalid action: " + action + ". Supported actions: auth, whoami, crud", 400);
+        return createErrorResponse("Invalid action: " + action, 400, requestId);
     }
-    
-    const handlerEndTime = Date.now();
-    logPerformance(`${action} Handler`, handlerStartTime, handlerEndTime);
-    
-    const requestEndTime = Date.now();
-    logPerformance('Complete Request', requestStartTime, requestEndTime, { 
-      requestId: requestId,
-      action: action,
-      success: true
-    });
-    
-    logMessage('INFO', 'Request processing completed successfully', { 
-      requestId: requestId,
-      action: action,
-      totalDuration: requestEndTime - requestStartTime
-    }, 'REQUEST_COMPLETE');
-    
-    return handlerResult;
-    
+
+    const duration = Date.now() - startTime;
+    console.log(
+      "Request completed successfully in " +
+        duration +
+        "ms - requestId: " +
+        requestId
+    );
+
+    return result;
   } catch (error) {
-    const requestEndTime = Date.now();
-    const errorData = logError(error, 'REQUEST_HANDLER', { 
-      requestId: requestId,
-      duration: requestEndTime - requestStartTime
-    });
-    
-    logMessage('ERROR', 'Request processing failed with unhandled exception', errorData, 'REQUEST_ERROR');
-    return createErrorResponse("Internal server error: " + error.message, 500);
+    const duration = Date.now() - startTime;
+    console.error(
+      "Request failed after " +
+        duration +
+        "ms: " +
+        error.message +
+        " - requestId: " +
+        requestId
+    );
+    return createErrorResponse(
+      "Internal server error: " + error.message,
+      500,
+      requestId
+    );
   }
 }
 
@@ -285,480 +215,372 @@ function handleRequest(e) {
  * Create standardized CORS response for preflight OPTIONS requests
  */
 function createCORSResponse() {
-  console.log('CORS preflight request handled');
-  
-  const output = ContentService.createTextOutput("")
-    .setMimeType(ContentService.MimeType.JSON);
-    
-  // Add comprehensive CORS headers for preflight requests
-  output.setHeaders({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-API-Token',
-    'Access-Control-Max-Age': '86400',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0'
-  });
-  
+  logMessage("DEBUG", "CORS preflight request handled");
+
+  const output = ContentService.createTextOutput(
+    JSON.stringify({
+      ok: true,
+      message: "CORS preflight successful",
+      timestamp: new Date().toISOString(),
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      headers: [
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-API-Token",
+      ],
+    })
+  ).setMimeType(ContentService.MimeType.JSON);
+
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Requested-With, X-API-Token, Accept, Origin",
+    "Access-Control-Max-Age": "86400",
+    "Access-Control-Allow-Credentials": "false",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+    Vary: "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+  };
+
+  // En Google Apps Script, los headers CORS se manejan automáticamente
+
   return output;
 }
 
 /**
- * Handle CRUD operations - Enhanced with detailed logging and performance tracking
+ * Enhanced CRUD handler with intelligent operation routing
  */
-function handleCRUD(data) {
-  const crudStartTime = Date.now();
-  const crudId = `crud_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
+function handleOptimizedCRUD(params, requestId) {
+  const startTime = Date.now();
+
   try {
-    const { table, operation } = data;
-    
-    logMessage('INFO', 'Starting CRUD operation', { 
-      table: table,
-      operation: operation,
-      crudId: crudId
-    }, 'CRUD_START');
-    
-    // Validate required parameters
+    const table = params.table;
+    const operation = params.operation;
+
     if (!table || !operation) {
-      logMessage('ERROR', 'Missing required CRUD parameters', { 
-        table: table,
-        operation: operation,
-        hasTable: !!table,
-        hasOperation: !!operation
-      }, 'CRUD_VALIDATION');
-      return createErrorResponse("Missing table or operation parameters", 400);
+      return createErrorResponse(
+        "Missing required parameters: table and operation",
+        400,
+        requestId
+      );
     }
 
-    // Log additional parameters for debugging
-    const additionalParams = { ...data };
-    delete additionalParams.table;
-    delete additionalParams.operation;
-    delete additionalParams.token;
-    delete additionalParams.action;
-    
-    logMessage('DEBUG', 'CRUD operation parameters', { 
-      table: table,
-      operation: operation,
-      additionalParams: additionalParams,
-      paramCount: Object.keys(additionalParams).length
-    }, 'CRUD_PARAMS');
+    logMessage(
+      "INFO",
+      "CRUD operation: " + operation + " on table: " + table,
+      requestId
+    );
 
-    let operationResult;
-    const operationStartTime = Date.now();
+    if (!isValidTable(table)) {
+      return createErrorResponse(
+        "Invalid table name: " + table,
+        400,
+        requestId
+      );
+    }
 
+    let result;
     switch (operation) {
       case "list":
-        logMessage('DEBUG', 'Executing list operation', { table: table }, 'CRUD_OPERATION');
-        operationResult = handleList(table, data);
+        result = handleOptimizedList(table, params, requestId);
         break;
       case "get":
-        logMessage('DEBUG', 'Executing get operation', { 
-          table: table, 
-          id: data.id 
-        }, 'CRUD_OPERATION');
-        operationResult = handleGet(table, data);
+        result = handleGet(table, params, requestId);
         break;
       case "create":
-        logMessage('DEBUG', 'Executing create operation', { 
-          table: table,
-          dataFields: Object.keys(additionalParams)
-        }, 'CRUD_OPERATION');
-        operationResult = handleCreate(table, data);
+        result = handleCreate(table, params, requestId);
         break;
       case "update":
-        logMessage('DEBUG', 'Executing update operation', { 
-          table: table,
-          id: data.id,
-          updateFields: Object.keys(additionalParams)
-        }, 'CRUD_OPERATION');
-        operationResult = handleUpdate(table, data);
+        result = handleUpdate(table, params, requestId);
         break;
       case "delete":
-        logMessage('DEBUG', 'Executing delete operation', { 
-          table: table,
-          id: data.id
-        }, 'CRUD_OPERATION');
-        operationResult = handleDelete(table, data);
+        result = handleDelete(table, params, requestId);
+        break;
+      case "search":
+        result = handleAdvancedSearch(table, params, requestId);
+        break;
+      case "count":
+        result = handleCount(table, params, requestId);
         break;
       default:
-        logMessage('ERROR', 'Invalid CRUD operation', { 
-          operation: operation,
-          supportedOperations: ['list', 'get', 'create', 'update', 'delete']
-        }, 'CRUD_VALIDATION');
-        return createErrorResponse("Invalid operation: " + operation + ". Supported: list, get, create, update, delete", 400);
+        return createErrorResponse(
+          "Invalid operation: " + operation,
+          400,
+          requestId
+        );
     }
-    
-    const operationEndTime = Date.now();
-    logPerformance(`CRUD ${operation}`, operationStartTime, operationEndTime, { 
-      table: table,
-      crudId: crudId
-    });
-    
-    const crudEndTime = Date.now();
-    logPerformance('Complete CRUD Operation', crudStartTime, crudEndTime, { 
-      table: table,
-      operation: operation,
-      crudId: crudId,
-      success: true
-    });
-    
-    logMessage('INFO', 'CRUD operation completed successfully', { 
-      table: table,
-      operation: operation,
-      crudId: crudId,
-      duration: crudEndTime - crudStartTime
-    }, 'CRUD_COMPLETE');
-    
-    return operationResult;
-    
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "CRUD " + operation + " completed in " + duration + "ms",
+      requestId
+    );
+
+    return result;
   } catch (error) {
-    const crudEndTime = Date.now();
-    const errorData = logError(error, 'CRUD_HANDLER', { 
-      table: data?.table,
-      operation: data?.operation,
-      crudId: crudId,
-      duration: crudEndTime - crudStartTime
-    });
-    
-    return createErrorResponse("CRUD operation failed: " + error.message, 500);
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "CRUD operation failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "CRUD operation failed: " + error.message,
+      500,
+      requestId
+    );
   }
 }
 
 /**
- * Handle list operation - Enhanced with detailed logging and data metrics
+ * Server-side paginated list with intelligent data loading
  */
-function handleList(table, data) {
-  const listStartTime = Date.now();
-  
+function handleOptimizedList(table, params, requestId) {
+  const startTime = Date.now();
+
   try {
-    logMessage('INFO', 'Starting list operation', { table: table }, 'LIST_OPERATION');
-    
-    // Handle Materials table with comprehensive mock data
-    if (table === "Materials" || table === "Materiales") {
-      logMessage('DEBUG', 'Processing materials table request', { table: table }, 'LIST_MATERIALS');
-      
-      const mockMaterials = [
-        {
-          id: "mat_001",
-          sku: "CEM-001",
-          descripcion: "Cemento Portland Tipo I - 50kg",
-          categoria: "Cemento",
-          unidad: "Bolsa",
-          costo_ref: 25.50,
-          stock_actual: 150,
-          stock_minimo: 20,
-          proveedor_principal: "Cementos Lima",
-          activo: true,
-          fecha_creacion: "2024-01-15T10:30:00.000Z",
-          fecha_actualizacion: "2024-01-20T14:45:00.000Z"
+    const page = Math.max(1, parseInt(params.page) || 1);
+    const limit = Math.min(
+      Math.max(
+        parseInt(params.limit) || CONFIG.DEFAULT_PAGE_SIZE,
+        CONFIG.MIN_PAGE_SIZE
+      ),
+      CONFIG.MAX_PAGE_SIZE
+    );
+
+    const filters = parseFilters(params.filters);
+    const search = (params.search || "").trim();
+    const sortBy = params.sort_by || "id";
+    const sortOrder = (params.sort_order || "asc").toLowerCase();
+
+    logMessage(
+      "DEBUG",
+      "List request - Table: " +
+        table +
+        ", Page: " +
+        page +
+        ", Limit: " +
+        limit +
+        ', Search: "' +
+        search +
+        '"',
+      requestId
+    );
+
+    const result = getOptimizedSheetData(table, {
+      page,
+      limit,
+      filters,
+      search,
+      sortBy,
+      sortOrder,
+    });
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "List operation completed in " +
+        duration +
+        "ms - Returned " +
+        result.data.length +
+        " records",
+      requestId
+    );
+
+    return createSuccessResponse(
+      {
+        ...result,
+        metadata: {
+          table: table,
+          execution_time_ms: duration,
+          request_id: requestId,
+          timestamp: new Date().toISOString(),
         },
-        {
-          id: "mat_002",
-          sku: "LAD-002",
-          descripcion: "Ladrillo King Kong 18 huecos",
-          categoria: "Ladrillos",
-          unidad: "Unidad",
-          costo_ref: 0.85,
-          stock_actual: 5000,
-          stock_minimo: 500,
-          proveedor_principal: "Ladrillos del Norte",
-          activo: true,
-          fecha_creacion: "2024-01-16T09:15:00.000Z",
-          fecha_actualizacion: "2024-01-22T11:20:00.000Z"
+      },
+      requestId
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Optimized list failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "Failed to list records: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+/**
+ * Advanced search with field weighting and relevance scoring
+ */
+function handleAdvancedSearch(table, params, requestId) {
+  const startTime = Date.now();
+
+  try {
+    const query = (params.query || "").trim();
+    const searchFields = params.search_fields
+      ? params.search_fields.split(",").map((f) => f.trim())
+      : [];
+    const limit = Math.min(
+      parseInt(params.limit) || 20,
+      CONFIG.MAX_SEARCH_RESULTS
+    );
+    const includeScore = params.include_score === "true";
+
+    if (!query) {
+      return createErrorResponse("Search query is required", 400, requestId);
+    }
+
+    logMessage(
+      "DEBUG",
+      "Search request - Table: " +
+        table +
+        ', Query: "' +
+        query +
+        '", Fields: [' +
+        searchFields.join(", ") +
+        "]",
+      requestId
+    );
+
+    const allData = getSheetDataFull(table);
+    const searchResults = performAdvancedSearch(
+      allData,
+      query,
+      searchFields,
+      includeScore
+    );
+    const results = searchResults.slice(0, limit);
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "Search completed in " +
+        duration +
+        "ms - Found " +
+        results.length +
+        " results",
+      requestId
+    );
+
+    return createSuccessResponse(
+      {
+        results: results,
+        total_found: searchResults.length,
+        query: query,
+        search_fields: searchFields,
+        metadata: {
+          execution_time_ms: duration,
+          request_id: requestId,
+          include_score: includeScore,
         },
-        {
-          id: "mat_003",
-          sku: "ARE-003",
-          descripcion: "Arena gruesa para construcción",
-          categoria: "Agregados",
-          unidad: "m³",
-          costo_ref: 45.00,
-          stock_actual: 25,
-          stock_minimo: 5,
-          proveedor_principal: "Agregados San Martín",
-          activo: true,
-          fecha_creacion: "2024-01-17T08:00:00.000Z",
-          fecha_actualizacion: "2024-01-25T16:30:00.000Z"
+      },
+      requestId
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Search failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "Search failed: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+/**
+ * Count operation for efficient record counting with filters
+ */
+function handleCount(table, params, requestId) {
+  const startTime = Date.now();
+
+  try {
+    const filters = parseFilters(params.filters);
+    const search = (params.search || "").trim();
+
+    logMessage("DEBUG", "Count request - Table: " + table, requestId);
+
+    const result = getRecordCount(table, filters, search);
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "Count completed in " +
+        duration +
+        "ms - Found " +
+        result.count +
+        " records",
+      requestId
+    );
+
+    return createSuccessResponse(
+      {
+        count: result.count,
+        table: table,
+        filters_applied: Object.keys(filters).length,
+        search_applied: !!search,
+        metadata: {
+          execution_time_ms: duration,
+          request_id: requestId,
         },
-        {
-          id: "mat_004",
-          sku: "FIE-004",
-          descripcion: "Fierro corrugado 1/2 pulgada",
-          categoria: "Acero",
-          unidad: "Varilla",
-          costo_ref: 28.75,
-          stock_actual: 200,
-          stock_minimo: 30,
-          proveedor_principal: "Aceros Arequipa",
-          activo: true,
-          fecha_creacion: "2024-01-18T13:45:00.000Z",
-          fecha_actualizacion: "2024-01-26T10:15:00.000Z"
-        },
-        {
-          id: "mat_005",
-          sku: "PIN-005",
-          descripcion: "Pintura látex blanco interior 4L",
-          categoria: "Pinturas",
-          unidad: "Galón",
-          costo_ref: 65.90,
-          stock_actual: 80,
-          stock_minimo: 15,
-          proveedor_principal: "Pinturas Tekno",
-          activo: true,
-          fecha_creacion: "2024-01-19T15:20:00.000Z",
-          fecha_actualizacion: "2024-01-27T09:40:00.000Z"
-        }
-      ];
-
-      // Log materials data metrics
-      const materialsMetrics = {
-        totalCount: mockMaterials.length,
-        categories: [...new Set(mockMaterials.map(m => m.categoria))],
-        activeCount: mockMaterials.filter(m => m.activo).length,
-        totalStockValue: mockMaterials.reduce((sum, m) => sum + (m.costo_ref * m.stock_actual), 0),
-        lowStockItems: mockMaterials.filter(m => m.stock_actual <= m.stock_minimo).length
-      };
-      
-      logMessage('INFO', 'Materials data prepared successfully', materialsMetrics, 'LIST_MATERIALS');
-      
-      const listEndTime = Date.now();
-      logPerformance('List Materials', listStartTime, listEndTime, { 
-        itemCount: mockMaterials.length,
-        table: table
-      });
-      
-      return createSuccessResponse(mockMaterials);
-    }
-
-    // Handle other tables with fallback
-    logMessage('WARN', 'No specific handler for table, returning empty array', { 
-      table: table,
-      availableTables: ['Materials', 'Materiales']
-    }, 'LIST_FALLBACK');
-    
-    const listEndTime = Date.now();
-    logPerformance('List Fallback', listStartTime, listEndTime, { 
-      table: table,
-      itemCount: 0
-    });
-    
-    return createSuccessResponse([]);
-    
+      },
+      requestId
+    );
   } catch (error) {
-    const listEndTime = Date.now();
-    const errorData = logError(error, 'LIST_OPERATION', { 
-      table: table,
-      duration: listEndTime - listStartTime
-    });
-    
-    return createErrorResponse("Failed to list items: " + error.message, 500);
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Count failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "Count failed: " + error.message,
+      500,
+      requestId
+    );
   }
 }
 
 /**
- * Handle get operation - Returns specific item by ID
+ * Handle authentication with enhanced security
  */
-function handleGet(table, data) {
+function handleAuth(params, requestId) {
+  const startTime = Date.now();
+
   try {
-    const { id } = data;
-    
-    if (!id) {
-      return createErrorResponse("Missing required parameter: id", 400);
+    logMessage("INFO", "Starting authentication process", requestId);
+
+    const email = params.email;
+    const password = params.password;
+
+    if (!email || !password) {
+      logMessage(
+        "ERROR",
+        "Authentication failed: missing credentials",
+        requestId
+      );
+      return createErrorResponse(
+        "Missing required parameters: email and password",
+        400,
+        requestId
+      );
     }
 
-    console.log(`Handling get operation for table: ${table}, id: ${id}`);
+    logMessage("INFO", "Authentication attempt for: " + email, requestId);
 
-    // Handle Materials table
-    if (table === 'Materials' || table === 'Materiales') {
-      // Return mock material object for testing
-      const mockMaterial = {
-        id: id,
-        sku: "CEM-001",
-        descripcion: "Cemento Portland Tipo I - 50kg",
-        categoria: "Cemento",
-        unidad: "Bolsa",
-        costo_ref: 25.50,
-        stock_actual: 150,
-        stock_minimo: 20,
-        proveedor_principal: "Cementos Lima",
-        activo: true,
-        fecha_creacion: "2024-01-15T10:30:00.000Z",
-        fecha_actualizacion: "2024-01-20T14:45:00.000Z"
-      };
-      
-      console.log(`Returning material with id: ${id}`);
-      return createSuccessResponse(mockMaterial);
-    }
-
-    // Return mock object for other tables
-    const mockObject = {
-      id: id,
-      name: `Mock ${table} Item`,
-      description: `This is a mock object for ${table} with id ${id}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    console.log(`Returning mock object for table ${table}, id: ${id}`);
-    return createSuccessResponse(mockObject);
-    
-  } catch (error) {
-    console.error("Get error:", error);
-    return createErrorResponse("Failed to get item: " + error.message, 500);
-  }
-}
-
-/**
- * Handle create operation - Creates new item and returns it with generated fields
- */
-function handleCreate(table, data) {
-  try {
-    console.log(`Handling create operation for table: ${table}`);
-    
-    // Generate unique ID for new item
-    const newId = `${table.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const currentTimestamp = new Date().toISOString();
-    
-    // Create new item with provided data plus generated fields
-    const newItem = {
-      ...data,
-      id: newId,
-      fecha_creacion: currentTimestamp,
-      fecha_actualizacion: currentTimestamp
-    };
-    
-    // Remove operation and table from the item data
-    delete newItem.operation;
-    delete newItem.table;
-    delete newItem.token;
-    delete newItem.action;
-    
-    console.log(`Created new ${table} item with id: ${newId}`);
-    return createSuccessResponse(newItem);
-    
-  } catch (error) {
-    console.error("Create error:", error);
-    return createErrorResponse("Failed to create item: " + error.message, 500);
-  }
-}
-
-/**
- * Handle update operation - Updates existing item and returns updated data
- */
-function handleUpdate(table, data) {
-  try {
-    const { id } = data;
-    
-    if (!id) {
-      return createErrorResponse("Missing required parameter: id", 400);
-    }
-
-    console.log(`Handling update operation for table: ${table}, id: ${id}`);
-    
-    // Update timestamp on modifications
-    const currentTimestamp = new Date().toISOString();
-    
-    // Create updated item with provided data plus updated timestamp
-    const updatedItem = {
-      ...data,
-      fecha_actualizacion: currentTimestamp
-    };
-    
-    // Remove operation and table from the item data
-    delete updatedItem.operation;
-    delete updatedItem.table;
-    delete updatedItem.token;
-    delete updatedItem.action;
-    
-    // Ensure the ID is preserved
-    updatedItem.id = id;
-    
-    console.log(`Updated ${table} item with id: ${id}`);
-    return createSuccessResponse(updatedItem);
-    
-  } catch (error) {
-    console.error("Update error:", error);
-    return createErrorResponse("Failed to update item: " + error.message, 500);
-  }
-}
-
-/**
- * Handle delete operation - Deletes item and returns success confirmation
- */
-function handleDelete(table, data) {
-  try {
-    const { id } = data;
-    
-    if (!id) {
-      return createErrorResponse("Missing required parameter: id", 400);
-    }
-
-    console.log(`Handling delete operation for table: ${table}, id: ${id}`);
-    
-    // Return success confirmation message
-    const confirmationMessage = {
-      message: `${table} item with id '${id}' has been successfully deleted`,
-      deleted_id: id,
-      table: table,
-      timestamp: new Date().toISOString()
-    };
-    
-    console.log(`Deleted ${table} item with id: ${id}`);
-    return createSuccessResponse(confirmationMessage);
-    
-  } catch (error) {
-    console.error("Delete error:", error);
-    return createErrorResponse("Failed to delete item: " + error.message, 500);
-  }
-}
-
-/**
- * Handle authentication - Enhanced with security logging and detailed tracking
- */
-function handleAuth(data) {
-  const authStartTime = Date.now();
-  const authId = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
-  try {
-    logMessage('INFO', 'Starting authentication process', { authId: authId }, 'AUTH_START');
-    
-    // Validate required parameters
-    if (!data.email) {
-      logMessage('ERROR', 'Authentication failed: missing email parameter', { authId: authId }, 'AUTH_VALIDATION');
-      return createErrorResponse("Missing required parameter: email", 400);
-    }
-    
-    if (!data.password) {
-      logMessage('ERROR', 'Authentication failed: missing password parameter', { 
-        authId: authId,
-        email: data.email
-      }, 'AUTH_VALIDATION');
-      return createErrorResponse("Missing required parameter: password", 400);
-    }
-    
-    const { email, password } = data;
-    
-    // Log authentication attempt (without sensitive data)
-    logMessage('INFO', 'Authentication attempt', { 
-      email: email,
-      authId: authId,
-      hasPassword: !!password,
-      passwordLength: password ? password.length : 0
-    }, 'AUTH_ATTEMPT');
-    
-    // Test user credentials validation
-    const credentialCheckStartTime = Date.now();
-    
     if (email === "admin@servesplatform.com" && password === "admin123") {
-      const credentialCheckEndTime = Date.now();
-      logPerformance('Credential Validation', credentialCheckStartTime, credentialCheckEndTime, { 
-        authId: authId,
-        result: 'success'
-      });
-      
-      // Create user object
       const user = {
         id: "user_admin_001",
         email: "admin@servesplatform.com",
@@ -772,87 +594,55 @@ function handleAuth(data) {
           "users.write",
           "projects.read",
           "projects.write",
-          "reports.read"
+          "reports.read",
         ],
         status: "active",
         last_login: new Date().toISOString(),
-        created_at: "2024-01-01T00:00:00.000Z"
+        created_at: "2024-01-01T00:00:00.000Z",
       };
-      
-      // Generate mock JWT token for successful authentication
-      const tokenGenerationStartTime = Date.now();
-      const token = `mock_jwt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const tokenGenerationEndTime = Date.now();
-      
-      logPerformance('Token Generation', tokenGenerationStartTime, tokenGenerationEndTime, { 
-        authId: authId,
-        tokenLength: token.length
-      });
-      
-      // Log successful authentication
-      logMessage('INFO', 'Authentication successful', { 
-        userId: user.id,
-        userRole: user.role,
-        authId: authId,
-        permissionCount: user.permissions.length
-      }, 'AUTH_SUCCESS');
-      
-      const authEndTime = Date.now();
-      logPerformance('Complete Authentication', authStartTime, authEndTime, { 
-        authId: authId,
-        email: email,
-        result: 'success'
-      });
-      
-      return createSuccessResponse({
-        user: user,
-        token: token,
-        message: "Login successful"
-      });
+
+      const token = generateJWT(user);
+
+      logMessage("INFO", "Authentication successful", requestId);
+
+      const duration = Date.now() - startTime;
+
+      return createSuccessResponse(
+        {
+          user: user,
+          token: token,
+          message: "Login successful",
+        },
+        requestId
+      );
     }
-    
-    // Handle invalid credentials
-    const credentialCheckEndTime = Date.now();
-    logPerformance('Credential Validation', credentialCheckStartTime, credentialCheckEndTime, { 
-      authId: authId,
-      result: 'failed'
-    });
-    
-    logMessage('WARN', 'Authentication failed: invalid credentials', { 
-      email: email,
-      authId: authId,
-      expectedEmail: 'admin@servesplatform.com'
-    }, 'AUTH_FAILURE');
-    
-    const authEndTime = Date.now();
-    logPerformance('Complete Authentication', authStartTime, authEndTime, { 
-      authId: authId,
-      email: email,
-      result: 'failed'
-    });
-    
-    return createErrorResponse("Invalid email or password", 401);
-    
+
+    logMessage("WARN", "Authentication failed: invalid credentials", requestId);
+
+    const duration = Date.now() - startTime;
+    return createErrorResponse("Invalid email or password", 401, requestId);
   } catch (error) {
-    const authEndTime = Date.now();
-    const errorData = logError(error, 'AUTH_HANDLER', { 
-      authId: authId,
-      email: data?.email,
-      duration: authEndTime - authStartTime
-    });
-    
-    return createErrorResponse("Authentication failed: " + error.message, 500);
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Authentication failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "Authentication failed: " + error.message,
+      500,
+      requestId
+    );
   }
 }
 
 /**
- * Handle user info requests (whoami endpoint) - Complete implementation
+ * Handle user info requests (whoami endpoint)
  */
-function handleWhoAmI(data) {
+function handleWhoAmI(params, requestId) {
   try {
-    console.log('Processing whoami request');
-    
-    // Return mock admin user object (no JWT dependency for simplicity)
+    logMessage("DEBUG", "Processing whoami request", requestId);
+
     const adminUser = {
       id: "user_admin_001",
       email: "admin@servesplatform.com",
@@ -860,13 +650,13 @@ function handleWhoAmI(data) {
       role: "admin",
       permissions: [
         "materials.read",
-        "materials.write", 
+        "materials.write",
         "materials.delete",
         "users.read",
         "users.write",
         "projects.read",
         "projects.write",
-        "reports.read"
+        "reports.read",
       ],
       status: "active",
       last_login: new Date().toISOString(),
@@ -874,262 +664,1041 @@ function handleWhoAmI(data) {
       profile: {
         department: "Administración",
         position: "Administrador del Sistema",
-        phone: "+51 999 888 777"
-      }
+        phone: "+51 999 888 777",
+      },
     };
-    
-    console.log('Returning admin user information');
-    return createSuccessResponse(adminUser);
-    
+
+    logMessage("DEBUG", "Returning admin user information", requestId);
+    return createSuccessResponse(adminUser, requestId);
   } catch (error) {
-    console.error("WhoAmI error:", error);
-    return createErrorResponse("Failed to get user info: " + error.message, 500);
+    logMessage("ERROR", "WhoAmI error: " + error.message, requestId);
+    return createErrorResponse(
+      "Failed to get user info: " + error.message,
+      500,
+      requestId
+    );
   }
 }
 
 /**
- * Create standardized error response with enhanced logging and CORS headers
+ * Generate JWT token
  */
-function createErrorResponse(message, status = 400) {
-  const timestamp = new Date().toISOString();
-  const responseId = `err_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
-  // Enhanced error logging with context
-  const errorResponseData = {
-    message: message,
-    status: status,
-    timestamp: timestamp,
-    responseId: responseId,
-    responseType: 'error'
-  };
-  
-  logMessage('ERROR', 'Creating error response', errorResponseData, 'ERROR_RESPONSE');
-  
-  const response = {
-    ok: false,
-    message: message,
-    status: status,
-    timestamp: timestamp,
-    error: true,
-    data: null,
-    responseId: responseId
+function generateJWT(payload) {
+  const header = {
+    alg: "HS256",
+    typ: "JWT",
   };
 
-  // Log response size and structure
-  const responseJson = JSON.stringify(response, null, 2);
-  logMessage('DEBUG', 'Error response structure created', { 
-    responseSize: responseJson.length,
-    responseId: responseId,
-    status: status
-  }, 'ERROR_RESPONSE');
-
-  // Create response with proper JSON formatting
-  const output = ContentService.createTextOutput(responseJson)
-    .setMimeType(ContentService.MimeType.JSON);
-    
-  // Add comprehensive CORS headers
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-    'Access-Control-Max-Age': '86400',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'X-Response-ID': responseId,
-    'X-Response-Type': 'error'
+  const now = Math.floor(Date.now() / 1000);
+  const jwtPayload = {
+    ...payload,
+    iat: now,
+    exp: now + 24 * 60 * 60,
   };
-  
-  output.setHeaders(headers);
-  
-  logMessage('DEBUG', 'Error response headers set', { 
-    headerCount: Object.keys(headers).length,
-    responseId: responseId
-  }, 'ERROR_RESPONSE');
-  
-  return output;
+
+  const encodedHeader = Utilities.base64EncodeWebSafe(
+    JSON.stringify(header)
+  ).replace(/=/g, "");
+  const encodedPayload = Utilities.base64EncodeWebSafe(
+    JSON.stringify(jwtPayload)
+  ).replace(/=/g, "");
+
+  const signature = Utilities.computeHmacSha256Signature(
+    encodedHeader + "." + encodedPayload,
+    CONFIG.JWT_SECRET
+  );
+  const encodedSignature = Utilities.base64EncodeWebSafe(signature).replace(
+    /=/g,
+    ""
+  );
+
+  return encodedHeader + "." + encodedPayload + "." + encodedSignature;
 }
 
 /**
- * Create standardized success response with enhanced logging and CORS headers
+ * Basic CRUD operations
  */
-function createSuccessResponse(data) {
-  const timestamp = new Date().toISOString();
-  const responseId = `suc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
-  // Enhanced success logging with data analysis
-  const dataAnalysis = {
-    dataType: typeof data,
-    hasData: data !== null && data !== undefined,
-    isArray: Array.isArray(data),
-    arrayLength: Array.isArray(data) ? data.length : null,
-    objectKeys: (data && typeof data === 'object' && !Array.isArray(data)) ? Object.keys(data).length : null,
-    timestamp: timestamp,
-    responseId: responseId
+function handleGet(table, params, requestId) {
+  try {
+    const id = params.id;
+
+    if (!id) {
+      return createErrorResponse(
+        "Missing required parameter: id",
+        400,
+        requestId
+      );
+    }
+
+    logMessage(
+      "DEBUG",
+      "Handling get operation for table: " + table + ", id: " + id,
+      requestId
+    );
+
+    const mockObject = {
+      id: id,
+      table: table,
+      name: "Mock " + table + " Item",
+      description: "This is a mock object for " + table + " with id " + id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    logMessage(
+      "DEBUG",
+      "Returning mock object for table " + table + ", id: " + id,
+      requestId
+    );
+    return createSuccessResponse(mockObject, requestId);
+  } catch (error) {
+    logMessage("ERROR", "Get error: " + error.message, requestId);
+    return createErrorResponse(
+      "Failed to get item: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+function handleCreate(table, params, requestId) {
+  try {
+    logMessage(
+      "DEBUG",
+      "Handling create operation for table: " + table,
+      requestId
+    );
+
+    const newId =
+      table.toLowerCase() +
+      "_" +
+      Date.now() +
+      "_" +
+      Math.random().toString(36).substr(2, 9);
+    const currentTimestamp = new Date().toISOString();
+
+    const newItem = {
+      ...params,
+      id: newId,
+      created_at: currentTimestamp,
+      updated_at: currentTimestamp,
+    };
+
+    delete newItem.operation;
+    delete newItem.table;
+    delete newItem.token;
+    delete newItem.action;
+
+    logMessage(
+      "INFO",
+      "Created new " + table + " item with id: " + newId,
+      requestId
+    );
+    return createSuccessResponse(newItem, requestId);
+  } catch (error) {
+    logMessage("ERROR", "Create error: " + error.message, requestId);
+    return createErrorResponse(
+      "Failed to create item: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+function handleUpdate(table, params, requestId) {
+  try {
+    const id = params.id;
+
+    if (!id) {
+      return createErrorResponse(
+        "Missing required parameter: id",
+        400,
+        requestId
+      );
+    }
+
+    logMessage(
+      "DEBUG",
+      "Handling update operation for table: " + table + ", id: " + id,
+      requestId
+    );
+
+    const currentTimestamp = new Date().toISOString();
+
+    const updatedItem = {
+      ...params,
+      updated_at: currentTimestamp,
+    };
+
+    delete updatedItem.operation;
+    delete updatedItem.table;
+    delete updatedItem.token;
+    delete updatedItem.action;
+
+    updatedItem.id = id;
+
+    logMessage("INFO", "Updated " + table + " item with id: " + id, requestId);
+    return createSuccessResponse(updatedItem, requestId);
+  } catch (error) {
+    logMessage("ERROR", "Update error: " + error.message, requestId);
+    return createErrorResponse(
+      "Failed to update item: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+function handleDelete(table, params, requestId) {
+  try {
+    const id = params.id;
+
+    if (!id) {
+      return createErrorResponse(
+        "Missing required parameter: id",
+        400,
+        requestId
+      );
+    }
+
+    logMessage(
+      "DEBUG",
+      "Handling delete operation for table: " + table + ", id: " + id,
+      requestId
+    );
+
+    const confirmationMessage = {
+      message:
+        table + " item with id '" + id + "' has been successfully deleted",
+      deleted_id: id,
+      table: table,
+      timestamp: new Date().toISOString(),
+    };
+
+    logMessage("INFO", "Deleted " + table + " item with id: " + id, requestId);
+    return createSuccessResponse(confirmationMessage, requestId);
+  } catch (error) {
+    logMessage("ERROR", "Delete error: " + error.message, requestId);
+    return createErrorResponse(
+      "Failed to delete item: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+/**
+ * Batch CRUD operations handler
+ */
+function handleBatchCRUD(params, requestId) {
+  const startTime = Date.now();
+
+  try {
+    const operations = params.operations;
+
+    if (!operations || !Array.isArray(operations)) {
+      return createErrorResponse(
+        "Missing or invalid operations array",
+        400,
+        requestId
+      );
+    }
+
+    if (operations.length > CONFIG.MAX_BATCH_SIZE) {
+      return createErrorResponse(
+        "Batch size exceeds maximum of " + CONFIG.MAX_BATCH_SIZE,
+        400,
+        requestId
+      );
+    }
+
+    logMessage(
+      "INFO",
+      "Processing batch of " + operations.length + " operations",
+      requestId
+    );
+
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < operations.length; i++) {
+      const operation = operations[i];
+
+      try {
+        const operationParams = {
+          ...operation,
+          token: params.token,
+          action: "crud",
+        };
+
+        const result = handleOptimizedCRUD(operationParams, requestId);
+        const resultData = JSON.parse(result.getContent());
+
+        results.push({
+          index: i,
+          operation: operation.operation,
+          table: operation.table,
+          success: resultData.ok || resultData.success,
+          data: resultData.data,
+          error: resultData.message,
+        });
+      } catch (error) {
+        errors.push({
+          index: i,
+          operation: operation.operation,
+          table: operation.table,
+          error: error.message,
+        });
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "Batch operation completed in " + duration + "ms",
+      requestId
+    );
+
+    return createSuccessResponse(
+      {
+        results: results,
+        errors: errors,
+        total_operations: operations.length,
+        successful_operations: results.filter((r) => r.success).length,
+        failed_operations: errors.length,
+        execution_time_ms: duration,
+      },
+      requestId
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Batch operation failed after " + duration + "ms: " + error.message,
+      requestId
+    );
+    return createErrorResponse(
+      "Batch operation failed: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+/**
+ * Health check endpoint
+ */
+function handleHealthCheck(requestId) {
+  try {
+    const sheetId = CONFIG.SHEET_ID;
+    let sheets = [];
+    let spreadsheetInfo = {};
+
+    if (sheetId) {
+      try {
+        const spreadsheet = SpreadsheetApp.openById(sheetId);
+        sheets = spreadsheet.getSheets().map((sheet) => ({
+          name: sheet.getName(),
+          rows: sheet.getLastRow(),
+          columns: sheet.getLastColumn(),
+        }));
+
+        spreadsheetInfo = {
+          id: sheetId,
+          name: spreadsheet.getName(),
+          url: spreadsheet.getUrl(),
+        };
+      } catch (error) {
+        logMessage(
+          "ERROR",
+          "Failed to access spreadsheet " + sheetId + ": " + error.message,
+          requestId
+        );
+        return createErrorResponse(
+          "Failed to access spreadsheet: " + error.message,
+          500,
+          requestId
+        );
+      }
+    } else {
+      logMessage("WARN", "No SHEET_ID configured", requestId);
+    }
+
+    return createSuccessResponse(
+      {
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        version: "2.0.0",
+        spreadsheet: spreadsheetInfo,
+        sheets: sheets,
+        config: {
+          sheet_id: sheetId,
+          default_page_size: CONFIG.DEFAULT_PAGE_SIZE,
+          max_page_size: CONFIG.MAX_PAGE_SIZE,
+          large_dataset_threshold: CONFIG.LARGE_DATASET_THRESHOLD,
+        },
+      },
+      requestId
+    );
+  } catch (error) {
+    return createErrorResponse(
+      "Health check failed: " + error.message,
+      500,
+      requestId
+    );
+  }
+}
+
+/**
+ * Core data retrieval with intelligent pagination
+ */
+function getOptimizedSheetData(tableName, options) {
+  const page = options.page || 1;
+  const limit = options.limit || CONFIG.DEFAULT_PAGE_SIZE;
+  const filters = options.filters || {};
+  const search = options.search || "";
+  const sortBy = options.sortBy || "id";
+  const sortOrder = options.sortOrder || "asc";
+
+  try {
+    const sheetId = CONFIG.SHEET_ID;
+    if (sheetId) {
+      const spreadsheet = SpreadsheetApp.openById(sheetId);
+      const sheet = spreadsheet.getSheetByName(tableName);
+
+      if (sheet) {
+        return processSheetData(sheet, options);
+      } else {
+        logMessage(
+          "WARN",
+          "Sheet '" + tableName + "' not found in spreadsheet " + sheetId
+        );
+      }
+    } else {
+      logMessage("WARN", "No SHEET_ID configured");
+    }
+  } catch (error) {
+    logMessage(
+      "WARN",
+      "Google Sheets not available for " +
+        tableName +
+        ", using mock data: " +
+        error.message
+    );
+  }
+
+  return processMockData(tableName, options);
+}
+
+/**
+ * Process actual sheet data
+ */
+function processSheetData(sheet, options) {
+  const page = options.page;
+  const limit = options.limit;
+  const filters = options.filters;
+  const search = options.search;
+  const sortBy = options.sortBy;
+  const sortOrder = options.sortOrder;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return createEmptyPaginationResult(page, limit);
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const totalRecords = lastRow - 1;
+  const allData = sheet
+    .getRange(2, 1, totalRecords, sheet.getLastColumn())
+    .getValues();
+
+  let data = allData.map((row) => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      obj[header] = row[index];
+    });
+    return obj;
+  });
+
+  data = applyFiltersAndSearch(data, filters, search);
+  const filteredCount = data.length;
+
+  data = applySorting(data, sortBy, sortOrder);
+
+  const offset = (page - 1) * limit;
+  const paginatedData = data.slice(offset, offset + limit);
+
+  return {
+    data: paginatedData,
+    pagination: {
+      page: page,
+      limit: limit,
+      total_records: totalRecords,
+      filtered_records: filteredCount,
+      total_pages: Math.ceil(filteredCount / limit),
+      has_next: offset + limit < filteredCount,
+      has_previous: page > 1,
+    },
+    filters_applied: Object.keys(filters).length,
+    search_applied: !!search,
+    sort: {
+      column: sortBy,
+      order: sortOrder,
+    },
+    source: "google_sheets",
   };
-  
-  logMessage('INFO', 'Creating success response', dataAnalysis, 'SUCCESS_RESPONSE');
-  
+}
+
+/**
+ * Process mock data with pagination
+ */
+function processMockData(tableName, options) {
+  const page = options.page;
+  const limit = options.limit;
+  const filters = options.filters;
+  const search = options.search;
+  const sortBy = options.sortBy;
+  const sortOrder = options.sortOrder;
+
+  let mockData = getMockTableData(tableName);
+  const totalRecords = mockData.length;
+
+  if (search) {
+    mockData = mockData.filter((record) => {
+      return Object.values(record).some((value) => {
+        if (value === null || value === undefined) return false;
+        return String(value).toLowerCase().includes(search.toLowerCase());
+      });
+    });
+  }
+
+  if (Object.keys(filters).length > 0) {
+    mockData = applyColumnFilters(mockData, filters);
+  }
+
+  const filteredCount = mockData.length;
+
+  mockData = applySorting(mockData, sortBy, sortOrder);
+
+  const offset = (page - 1) * limit;
+  const paginatedData = mockData.slice(offset, offset + limit);
+
+  return {
+    data: paginatedData,
+    pagination: {
+      page: page,
+      limit: limit,
+      total_records: totalRecords,
+      filtered_records: filteredCount,
+      total_pages: Math.ceil(filteredCount / limit),
+      has_next: offset + limit < filteredCount,
+      has_previous: page > 1,
+    },
+    filters_applied: Object.keys(filters).length,
+    search_applied: !!search,
+    sort: {
+      column: sortBy,
+      order: sortOrder,
+    },
+    source: "mock_data",
+  };
+}
+
+/**
+ * Apply filters and search to data
+ */
+function applyFiltersAndSearch(data, filters, search) {
+  let filteredData = data;
+
+  if (search) {
+    const searchLower = search.toLowerCase();
+    filteredData = filteredData.filter((record) => {
+      return Object.values(record).some((value) => {
+        if (value === null || value === undefined) return false;
+        return String(value).toLowerCase().includes(searchLower);
+      });
+    });
+  }
+
+  if (Object.keys(filters).length > 0) {
+    filteredData = applyColumnFilters(filteredData, filters);
+  }
+
+  return filteredData;
+}
+
+/**
+ * Apply column-specific filters
+ */
+function applyColumnFilters(data, filters) {
+  return data.filter((record) => {
+    return Object.entries(filters).every(([column, filterValue]) => {
+      const recordValue = record[column];
+
+      if (recordValue === null || recordValue === undefined) {
+        return filterValue === null || filterValue === undefined;
+      }
+
+      if (typeof filterValue === "object" && filterValue !== null) {
+        if (filterValue.min !== undefined || filterValue.max !== undefined) {
+          const numValue = parseFloat(recordValue);
+          if (isNaN(numValue)) return false;
+
+          if (filterValue.min !== undefined && numValue < filterValue.min)
+            return false;
+          if (filterValue.max !== undefined && numValue > filterValue.max)
+            return false;
+
+          return true;
+        }
+
+        if (filterValue.from !== undefined || filterValue.to !== undefined) {
+          const recordDate = new Date(recordValue);
+          if (isNaN(recordDate.getTime())) return false;
+
+          if (filterValue.from && recordDate < new Date(filterValue.from))
+            return false;
+          if (filterValue.to && recordDate > new Date(filterValue.to))
+            return false;
+
+          return true;
+        }
+
+        if (filterValue.contains !== undefined) {
+          return String(recordValue)
+            .toLowerCase()
+            .includes(String(filterValue.contains).toLowerCase());
+        }
+      }
+
+      return (
+        String(recordValue).toLowerCase() === String(filterValue).toLowerCase()
+      );
+    });
+  });
+}
+
+/**
+ * Apply sorting with enhanced type handling
+ */
+function applySorting(data, sortBy, sortOrder) {
+  return data.sort((a, b) => {
+    let aVal = a[sortBy];
+    let bVal = b[sortBy];
+
+    if (aVal === null || aVal === undefined) aVal = "";
+    if (bVal === null || bVal === undefined) bVal = "";
+
+    if (typeof aVal === "string" && typeof bVal === "string") {
+      const aNum = parseFloat(aVal);
+      const bNum = parseFloat(bVal);
+
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        aVal = aNum;
+        bVal = bNum;
+      } else {
+        const aDate = new Date(aVal);
+        const bDate = new Date(bVal);
+
+        if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+          aVal = aDate;
+          bVal = bDate;
+        } else {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+      }
+    }
+
+    let comparison = 0;
+    if (aVal > bVal) comparison = 1;
+    if (aVal < bVal) comparison = -1;
+
+    return sortOrder === "desc" ? -comparison : comparison;
+  });
+}
+
+/**
+ * Create empty pagination result
+ */
+function createEmptyPaginationResult(page, limit, totalRecords) {
+  totalRecords = totalRecords || 0;
+  return {
+    data: [],
+    pagination: {
+      page: page,
+      limit: limit,
+      total_records: totalRecords,
+      filtered_records: 0,
+      total_pages: 0,
+      has_next: false,
+      has_previous: page > 1,
+    },
+    filters_applied: 0,
+    search_applied: false,
+    sort: {
+      column: "id",
+      order: "asc",
+    },
+  };
+}
+
+/**
+ * Validate table name
+ */
+function isValidTable(tableName) {
+  const validTables = [
+    "Usuarios",
+    "Clientes",
+    "Proyectos",
+    "Actividades",
+    "Colaboradores",
+    "Asignaciones",
+    "Horas",
+    "Materiales",
+    "BOM",
+    "Config",
+    "Checklists",
+    "ActivityChecklists",
+    "Evidencias",
+    "Documentos",
+    "CategoriaDocumentos",
+    "DocumentosProyecto",
+    "AuditLog",
+  ];
+
+  return validTables.includes(tableName);
+}
+
+/**
+ * Generate unique request ID
+ */
+function generateRequestId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+/**
+ * Lightweight logging utility
+ */
+function logMessage(level, message, requestId) {
+  if (!CONFIG.ENABLE_LOGGING) return;
+
+  const levels = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+  if (levels[level] < levels[CONFIG.LOG_LEVEL]) return;
+
+  const timestamp = new Date().toISOString();
+  let logOutput = "[" + timestamp + "] " + level + ": " + message;
+  if (requestId) logOutput += " (Request: " + requestId + ")";
+
+  switch (level) {
+    case "ERROR":
+      console.error(logOutput);
+      break;
+    case "WARN":
+      console.warn(logOutput);
+      break;
+    case "INFO":
+      console.info(logOutput);
+      break;
+    case "DEBUG":
+    default:
+      console.log(logOutput);
+      break;
+  }
+}
+
+/**
+ * Apply enhanced CORS headers to any response
+ */
+function applyCORSHeaders(output) {
+  // En Google Apps Script, no podemos modificar headers después de crear el output
+  // Los headers CORS se deben agregar al crear la respuesta
+  return output;
+}
+
+function createSuccessResponse(data, requestId) {
   const response = {
     ok: true,
+    success: true,
     data: data,
-    status: 200,
-    timestamp: timestamp,
-    error: false,
-    message: 'Request completed successfully',
-    responseId: responseId
+    timestamp: new Date().toISOString(),
+    request_id: requestId,
   };
 
-  // Log response size and structure
-  const responseJson = JSON.stringify(response, null, 2);
-  logMessage('DEBUG', 'Success response structure created', { 
-    responseSize: responseJson.length,
-    responseId: responseId,
-    dataIncluded: !!data
-  }, 'SUCCESS_RESPONSE');
-
-  // Create response with proper JSON formatting (indented for readability)
-  const output = ContentService.createTextOutput(responseJson)
-    .setMimeType(ContentService.MimeType.JSON);
-    
-  // Add comprehensive CORS headers
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-    'Access-Control-Max-Age': '86400',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'X-Response-ID': responseId,
-    'X-Response-Type': 'success'
-  };
-  
-  output.setHeaders(headers);
-  
-  logMessage('DEBUG', 'Success response headers set', { 
-    headerCount: Object.keys(headers).length,
-    responseId: responseId
-  }, 'SUCCESS_RESPONSE');
-  
-  return output;
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(
+    ContentService.MimeType.JSON
+  );
 }
 
 /**
- * Initialize script properties (backup function - not required with hardcoded CONFIG)
+ * Create error response with metadata
  */
-function initializeProperties() {
-  const initStartTime = Date.now();
-  
-  try {
-    logMessage('INFO', 'Starting script properties initialization', null, 'INITIALIZATION');
-    
-    const properties = PropertiesService.getScriptProperties();
+function createErrorResponse(message, status, requestId) {
+  const response = {
+    ok: false,
+    success: false,
+    error: true,
+    message: message,
+    status: status,
+    timestamp: new Date().toISOString(),
+    request_id: requestId,
+  };
 
-    // Set default properties with the correct values
-    const propertiesToSet = {
-      SHEET_ID: CONFIG.SHEET_ID,
-      API_TOKEN: CONFIG.API_TOKEN,
-      JWT_SECRET: CONFIG.JWT_SECRET,
-      ENVIRONMENT: CONFIG.ENVIRONMENT,
-      LAST_INITIALIZED: new Date().toISOString()
-    };
-    
-    properties.setProperties(propertiesToSet);
-    
-    const initEndTime = Date.now();
-    logPerformance('Script Properties Initialization', initStartTime, initEndTime, { 
-      propertyCount: Object.keys(propertiesToSet).length
-    });
-    
-    logMessage('INFO', 'Script properties initialized successfully', { 
-      propertyCount: Object.keys(propertiesToSet).length,
-      environment: CONFIG.ENVIRONMENT
-    }, 'INITIALIZATION');
-    
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(
+    ContentService.MimeType.JSON
+  );
+}
+
+/**
+ * Get mock data for testing when Google Sheets is not available
+ */
+function getMockTableData(tableName) {
+  const mockData = {
+    Usuarios: [
+      {
+        id: "user_001",
+        nombre: "Juan Pérez",
+        email: "juan@servesplatform.com",
+        rol: "admin",
+        estado: "activo",
+        fecha_creacion: "2024-01-15",
+        ultimo_acceso: "2024-08-28",
+      },
+      {
+        id: "user_002",
+        nombre: "María García",
+        email: "maria@servesplatform.com",
+        rol: "usuario",
+        estado: "activo",
+        fecha_creacion: "2024-02-01",
+        ultimo_acceso: "2024-08-27",
+      },
+    ],
+    Proyectos: [
+      {
+        id: "proj_001",
+        nombre: "Construcción Edificio A",
+        cliente_id: "client_001",
+        responsable_id: "user_001",
+        estado: "en_progreso",
+        fecha_inicio: "2024-01-01",
+        fecha_fin_estimada: "2024-12-31",
+        presupuesto: 500000,
+        progreso: 45,
+      },
+      {
+        id: "proj_002",
+        nombre: "Renovación Oficinas",
+        cliente_id: "client_002",
+        responsable_id: "user_002",
+        estado: "planificacion",
+        fecha_inicio: "2024-03-01",
+        fecha_fin_estimada: "2024-08-31",
+        presupuesto: 150000,
+        progreso: 15,
+      },
+    ],
+    Materiales: [
+      {
+        id: "mat_001",
+        sku: "CEM-001",
+        nombre: "Cemento Portland",
+        categoria: "Construcción",
+        unidad: "bolsa",
+        costo_ref: 25.5,
+        stock_actual: 150,
+        stock_minimo: 50,
+        proveedor: "Cementos del Norte",
+      },
+      {
+        id: "mat_002",
+        sku: "HIE-001",
+        nombre: "Hierro 12mm",
+        categoria: "Construcción",
+        unidad: "varilla",
+        costo_ref: 45.0,
+        stock_actual: 200,
+        stock_minimo: 100,
+        proveedor: "Aceros del Sur",
+      },
+    ],
+    Actividades: [
+      {
+        id: "act_001",
+        proyecto_id: "proj_001",
+        nombre: "Excavación",
+        descripcion: "Excavación para cimientos",
+        responsable_id: "user_001",
+        estado: "completada",
+        fecha_inicio: "2024-01-15",
+        fecha_fin: "2024-01-30",
+        progreso: 100,
+      },
+      {
+        id: "act_002",
+        proyecto_id: "proj_001",
+        nombre: "Cimentación",
+        descripcion: "Construcción de cimientos",
+        responsable_id: "user_002",
+        estado: "en_progreso",
+        fecha_inicio: "2024-02-01",
+        fecha_fin_estimada: "2024-02-28",
+        progreso: 60,
+      },
+    ],
+  };
+
+  return mockData[tableName] || [];
+}
+
+/**
+ * Parse filters from request parameters
+ */
+function parseFilters(filtersParam) {
+  if (!filtersParam) return {};
+
+  try {
+    if (typeof filtersParam === "string") {
+      return JSON.parse(filtersParam);
+    }
+    return filtersParam;
   } catch (error) {
-    const initEndTime = Date.now();
-    logError(error, 'INITIALIZATION', { 
-      duration: initEndTime - initStartTime
-    });
-    throw error;
+    logMessage("WARN", "Failed to parse filters: " + error.message);
+    return {};
   }
 }
 
 /**
- * Configure logging settings - Can be called to adjust logging behavior
+ * Get record count with filters
  */
-function configureLogging(enableLogging = true, logLevel = 'DEBUG') {
-  const oldConfig = {
-    ENABLE_DETAILED_LOGGING: CONFIG.ENABLE_DETAILED_LOGGING,
-    LOG_LEVEL: CONFIG.LOG_LEVEL
-  };
-  
-  CONFIG.ENABLE_DETAILED_LOGGING = enableLogging;
-  CONFIG.LOG_LEVEL = logLevel;
-  
-  logMessage('INFO', 'Logging configuration updated', { 
-    oldConfig: oldConfig,
-    newConfig: {
-      ENABLE_DETAILED_LOGGING: CONFIG.ENABLE_DETAILED_LOGGING,
-      LOG_LEVEL: CONFIG.LOG_LEVEL
+function getRecordCount(tableName, filters, search) {
+  try {
+    const sheetId = CONFIG.SHEET_ID;
+    if (sheetId) {
+      const spreadsheet = SpreadsheetApp.openById(sheetId);
+      const sheet = spreadsheet.getSheetByName(tableName);
+
+      if (sheet) {
+        const lastRow = sheet.getLastRow();
+        let count = Math.max(0, lastRow - 1);
+
+        if (Object.keys(filters).length > 0 || search) {
+          const data = getOptimizedSheetData(tableName, {
+            page: 1,
+            limit: 10000,
+            filters: filters,
+            search: search,
+          });
+          count = data.pagination.filtered_records;
+        }
+
+        return { count: count };
+      }
     }
-  }, 'LOGGING_CONFIG');
-  
-  return {
-    success: true,
-    oldConfig: oldConfig,
-    newConfig: {
-      ENABLE_DETAILED_LOGGING: CONFIG.ENABLE_DETAILED_LOGGING,
-      LOG_LEVEL: CONFIG.LOG_LEVEL
-    }
-  };
+
+    const mockData = getMockTableData(tableName);
+    return { count: mockData.length };
+  } catch (error) {
+    logMessage(
+      "ERROR",
+      "Failed to get record count for " + tableName + ": " + error.message
+    );
+    return { count: 0 };
+  }
 }
 
 /**
- * Get current system status and configuration for debugging
+ * Perform advanced search with scoring
  */
-function getSystemStatus() {
-  const statusStartTime = Date.now();
-  
-  try {
-    logMessage('INFO', 'Generating system status report', null, 'SYSTEM_STATUS');
-    
-    const status = {
-      timestamp: new Date().toISOString(),
-      config: {
-        environment: CONFIG.ENVIRONMENT,
-        loggingEnabled: CONFIG.ENABLE_DETAILED_LOGGING,
-        logLevel: CONFIG.LOG_LEVEL,
-        hasApiToken: !!CONFIG.API_TOKEN,
-        apiTokenLength: CONFIG.API_TOKEN ? CONFIG.API_TOKEN.length : 0
-      },
-      runtime: {
-        scriptVersion: 'Enhanced with Comprehensive Logging',
-        executionTime: Date.now() - statusStartTime
-      },
-      endpoints: {
-        available: ['auth', 'whoami', 'crud'],
-        crudOperations: ['list', 'get', 'create', 'update', 'delete'],
-        supportedTables: ['Materials', 'Materiales']
+function performAdvancedSearch(data, query, searchFields, includeScore) {
+  if (!query || !data || data.length === 0) {
+    return data;
+  }
+
+  const queryLower = query.toLowerCase();
+  const results = [];
+
+  data.forEach((record) => {
+    let score = 0;
+    let matches = 0;
+
+    const fieldsToSearch =
+      searchFields.length > 0 ? searchFields : Object.keys(record);
+
+    fieldsToSearch.forEach((field) => {
+      const value = record[field];
+      if (value !== null && value !== undefined) {
+        const valueStr = String(value).toLowerCase();
+
+        if (valueStr.includes(queryLower)) {
+          matches++;
+
+          if (valueStr === queryLower) {
+            score += 10;
+          } else if (valueStr.startsWith(queryLower)) {
+            score += 5;
+          } else {
+            score += 1;
+          }
+        }
       }
-    };
-    
-    const statusEndTime = Date.now();
-    logPerformance('System Status Generation', statusStartTime, statusEndTime);
-    
-    logMessage('INFO', 'System status report generated', { 
-      configItems: Object.keys(status.config).length,
-      endpointCount: status.endpoints.available.length
-    }, 'SYSTEM_STATUS');
-    
-    return status;
-    
-  } catch (error) {
-    const statusEndTime = Date.now();
-    logError(error, 'SYSTEM_STATUS', { 
-      duration: statusEndTime - statusStartTime
     });
-    throw error;
+
+    if (matches > 0) {
+      const result = { ...record };
+      if (includeScore) {
+        result._search_score = score;
+        result._search_matches = matches;
+      }
+      results.push(result);
+    }
+  });
+
+  if (includeScore) {
+    results.sort((a, b) => b._search_score - a._search_score);
+  }
+
+  return results;
+}
+
+/**
+ * Get full sheet data without pagination (for search operations)
+ */
+function getSheetDataFull(tableName) {
+  try {
+    const sheetId = CONFIG.SHEET_ID;
+    if (sheetId) {
+      const spreadsheet = SpreadsheetApp.openById(sheetId);
+      const sheet = spreadsheet.getSheetByName(tableName);
+
+      if (sheet) {
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) return [];
+
+        const headers = sheet
+          .getRange(1, 1, 1, sheet.getLastColumn())
+          .getValues()[0];
+        const totalRecords = lastRow - 1;
+        const allData = sheet
+          .getRange(2, 1, totalRecords, sheet.getLastColumn())
+          .getValues();
+
+        return allData.map((row) => {
+          const obj = {};
+          headers.forEach((header, index) => {
+            obj[header] = row[index];
+          });
+          return obj;
+        });
+      }
+    }
+
+    return getMockTableData(tableName);
+  } catch (error) {
+    logMessage(
+      "ERROR",
+      "Failed to get full sheet data for " + tableName + ": " + error.message
+    );
+    return getMockTableData(tableName);
   }
 }

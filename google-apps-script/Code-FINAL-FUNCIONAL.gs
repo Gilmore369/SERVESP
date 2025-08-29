@@ -100,14 +100,117 @@ function handleCRUD(params) {
 }
 
 /**
- * Lista elementos de una tabla
+ * ENHANCED: Lista elementos de una tabla con paginación optimizada
  */
 function handleList(table, params) {
   try {
-    console.log("Listando tabla:", table);
+    console.log("Listando tabla con paginación:", table);
     
-    if (table === "Materiales") {
-      const materiales = [
+    // Parse pagination parameters
+    const page = Math.max(1, parseInt(params.page) || 1);
+    const limit = Math.min(Math.max(parseInt(params.limit) || 50, 10), 200);
+    const search = (params.search || '').trim();
+    const filters = parseFilters(params.filters);
+    const sortBy = params.sort_by || 'id';
+    const sortOrder = (params.sort_order || 'asc').toLowerCase();
+
+    console.log(`Pagination params - Page: ${page}, Limit: ${limit}, Search: "${search}"`);
+
+    // Try to get data from actual Google Sheets first
+    try {
+      const result = getOptimizedSheetData(table, {
+        page,
+        limit,
+        filters,
+        search,
+        sortBy,
+        sortOrder
+      });
+      
+      if (result.data.length > 0 || result.pagination.total_records > 0) {
+        console.log(`Returning ${result.data.length} records from Google Sheets`);
+        return createSuccessResponse({
+          ...result,
+          source: 'google_sheets',
+          metadata: {
+            execution_time_ms: Date.now() - Date.now(),
+            table: table
+          }
+        });
+      }
+    } catch (sheetError) {
+      console.log("Google Sheets not available, using mock data:", sheetError.message);
+    }
+
+    // Fallback to mock data with pagination
+    let mockData = getMockTableData(table);
+    const totalRecords = mockData.length;
+
+    // Apply search if provided
+    if (search) {
+      mockData = mockData.filter(record => {
+        return Object.values(record).some(value => {
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(search.toLowerCase());
+        });
+      });
+    }
+
+    // Apply filters
+    if (Object.keys(filters).length > 0) {
+      mockData = applyColumnFilters(mockData, filters);
+    }
+
+    const filteredCount = mockData.length;
+
+    // Apply sorting
+    mockData = applySorting(mockData, sortBy, sortOrder);
+
+    // Apply pagination
+    const offset = (page - 1) * limit;
+    const paginatedData = mockData.slice(offset, offset + limit);
+
+    console.log(`Returning ${paginatedData.length} records from mock data`);
+
+    const response = {
+      data: paginatedData,
+      pagination: {
+        page: page,
+        limit: limit,
+        total_records: totalRecords,
+        filtered_records: filteredCount,
+        total_pages: Math.ceil(filteredCount / limit),
+        has_next: offset + limit < filteredCount,
+        has_previous: page > 1
+      },
+      filters_applied: Object.keys(filters).length,
+      search_applied: !!search,
+      sort: {
+        column: sortBy,
+        order: sortOrder
+      },
+      source: 'mock_data',
+      metadata: {
+        table: table,
+        execution_time_ms: Date.now() - Date.now()
+      }
+    };
+
+    return createSuccessResponse(response);
+    
+  } catch (error) {
+    console.error("Error en handleList:", error);
+    return createErrorResponse("Error al listar: " + error.message, 500);
+  }
+}
+
+/**
+ * UTILITY: Get mock data for tables
+ */
+function getMockTableData(table) {
+  switch (table.toLowerCase()) {
+    case "materiales":
+      return [
         {
           id: "1",
           sku: "MAT001",
@@ -177,19 +280,69 @@ function handleList(table, params) {
           activo: true,
           fecha_creacion: "2025-08-27T10:00:00.000Z",
           fecha_actualizacion: "2025-08-27T10:00:00.000Z"
+        },
+        {
+          id: "6",
+          sku: "MAT006",
+          descripcion: "Cable THW 12 AWG",
+          categoria: "Eléctrico",
+          unidad: "Metro",
+          costo_ref: 2.50,
+          stock_actual: 500,
+          stock_minimo: 100,
+          proveedor_principal: "Cables del Perú",
+          activo: true,
+          fecha_creacion: "2025-08-27T10:00:00.000Z",
+          fecha_actualizacion: "2025-08-27T10:00:00.000Z"
+        },
+        {
+          id: "7",
+          sku: "MAT007",
+          descripcion: "Tubo PVC 4 pulgadas",
+          categoria: "Plomería",
+          unidad: "Metro",
+          costo_ref: 12.00,
+          stock_actual: 200,
+          stock_minimo: 50,
+          proveedor_principal: "Pavco",
+          activo: true,
+          fecha_creacion: "2025-08-27T10:00:00.000Z",
+          fecha_actualizacion: "2025-08-27T10:00:00.000Z"
+        },
+        {
+          id: "8",
+          sku: "MAT008",
+          descripcion: "Interruptor Simple",
+          categoria: "Eléctrico",
+          unidad: "Unidad",
+          costo_ref: 8.50,
+          stock_actual: 75,
+          stock_minimo: 25,
+          proveedor_principal: "Ticino",
+          activo: true,
+          fecha_creacion: "2025-08-27T10:00:00.000Z",
+          fecha_actualizacion: "2025-08-27T10:00:00.000Z"
         }
       ];
-      
-      console.log("Devolviendo", materiales.length, "materiales");
-      return createSuccessResponse(materiales);
-    }
-
-    // Para otras tablas, devolver array vacío
-    return createSuccessResponse([]);
-    
-  } catch (error) {
-    console.error("Error en handleList:", error);
-    return createErrorResponse("Error al listar: " + error.message, 500);
+    case "proyectos":
+      return [
+        {
+          id: "PRY001",
+          codigo: "PRY-2024-001",
+          nombre: "Instalación Eléctrica Oficina Central",
+          cliente_id: "CLI001",
+          responsable_id: "USR001",
+          ubicacion: "Lima Centro",
+          descripcion: "Instalación completa del sistema eléctrico",
+          linea_servicio: "Eléctrico",
+          estado: "En progreso",
+          avance_pct: 45,
+          fecha_creacion: "2025-08-27T10:00:00.000Z",
+          fecha_actualizacion: "2025-08-27T10:00:00.000Z"
+        }
+      ];
+    default:
+      return [];
   }
 }
 
@@ -389,4 +542,205 @@ function testFunction() {
   console.log("Test function ejecutada correctamente");
   console.log("CONFIG:", JSON.stringify(CONFIG));
   return "OK";
+}
+/**
+
+ * UTILITY FUNCTIONS FOR OPTIMIZED PAGINATION
+ */
+
+/**
+ * Parse filters from string or object
+ */
+function parseFilters(filtersParam) {
+  if (!filtersParam) return {};
+  
+  try {
+    if (typeof filtersParam === 'string') {
+      return JSON.parse(filtersParam);
+    }
+    return filtersParam;
+  } catch (error) {
+    console.error('Error parsing filters:', error);
+    return {};
+  }
+}
+
+/**
+ * Apply column-specific filters
+ */
+function applyColumnFilters(data, filters) {
+  return data.filter(record => {
+    return Object.entries(filters).every(([column, filterValue]) => {
+      const recordValue = record[column];
+      
+      if (recordValue === null || recordValue === undefined) {
+        return filterValue === null || filterValue === undefined || filterValue === '';
+      }
+
+      // Handle different filter types
+      if (typeof filterValue === 'object' && filterValue !== null) {
+        // Range filter: {min: 10, max: 100}
+        if (filterValue.min !== undefined || filterValue.max !== undefined) {
+          const numValue = parseFloat(recordValue);
+          if (isNaN(numValue)) return false;
+          
+          if (filterValue.min !== undefined && numValue < filterValue.min) return false;
+          if (filterValue.max !== undefined && numValue > filterValue.max) return false;
+          
+          return true;
+        }
+        
+        // Array filter: {in: ["value1", "value2"]}
+        if (filterValue.in && Array.isArray(filterValue.in)) {
+          return filterValue.in.includes(recordValue);
+        }
+        
+        // Contains filter: {contains: "text"}
+        if (filterValue.contains !== undefined) {
+          return String(recordValue).toLowerCase().includes(String(filterValue.contains).toLowerCase());
+        }
+      }
+      
+      // Exact match filter
+      return String(recordValue).toLowerCase() === String(filterValue).toLowerCase();
+    });
+  });
+}
+
+/**
+ * Apply sorting with enhanced type handling
+ */
+function applySorting(data, sortBy, sortOrder) {
+  return data.sort((a, b) => {
+    let aVal = a[sortBy];
+    let bVal = b[sortBy];
+    
+    // Handle null/undefined values
+    if (aVal === null || aVal === undefined) aVal = '';
+    if (bVal === null || bVal === undefined) bVal = '';
+    
+    // Try to detect and handle different data types
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      // Check if strings represent numbers
+      const aNum = parseFloat(aVal);
+      const bNum = parseFloat(bVal);
+      
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        aVal = aNum;
+        bVal = bNum;
+      } else {
+        // Check if strings represent dates
+        const aDate = new Date(aVal);
+        const bDate = new Date(bVal);
+        
+        if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+          aVal = aDate;
+          bVal = bDate;
+        } else {
+          // String comparison (case-insensitive)
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+      }
+    }
+    
+    let comparison = 0;
+    if (aVal > bVal) comparison = 1;
+    if (aVal < bVal) comparison = -1;
+    
+    return sortOrder === 'desc' ? -comparison : comparison;
+  });
+}
+
+/**
+ * ENHANCED: Get optimized sheet data (simplified version for integration)
+ */
+function getOptimizedSheetData(tableName, options = {}) {
+  const {
+    page = 1,
+    limit = 50,
+    filters = {},
+    search = '',
+    sortBy = 'id',
+    sortOrder = 'asc'
+  } = options;
+
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getSheetByName(tableName);
+    
+    if (!sheet) {
+      throw new Error(`Sheet ${tableName} not found`);
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return {
+        data: [],
+        pagination: {
+          page: page,
+          limit: limit,
+          total_records: 0,
+          filtered_records: 0,
+          total_pages: 0,
+          has_next: false,
+          has_previous: page > 1
+        }
+      };
+    }
+
+    // Get headers and data
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const totalRecords = lastRow - 1;
+    const allData = sheet.getRange(2, 1, totalRecords, sheet.getLastColumn()).getValues();
+    
+    let data = allData.map(row => {
+      const obj = {};
+      headers.forEach((header, index) => {
+        obj[header] = row[index];
+      });
+      return obj;
+    });
+
+    // Apply search
+    if (search) {
+      data = data.filter(record => {
+        return Object.values(record).some(value => {
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(search.toLowerCase());
+        });
+      });
+    }
+
+    // Apply filters
+    if (Object.keys(filters).length > 0) {
+      data = applyColumnFilters(data, filters);
+    }
+
+    const filteredCount = data.length;
+
+    // Apply sorting
+    data = applySorting(data, sortBy, sortOrder);
+
+    // Apply pagination
+    const offset = (page - 1) * limit;
+    const paginatedData = data.slice(offset, offset + limit);
+
+    return {
+      data: paginatedData,
+      pagination: {
+        page: page,
+        limit: limit,
+        total_records: totalRecords,
+        filtered_records: filteredCount,
+        total_pages: Math.ceil(filteredCount / limit),
+        has_next: offset + limit < filteredCount,
+        has_previous: page > 1
+      }
+    };
+
+  } catch (error) {
+    console.error(`Error getting optimized sheet data for ${tableName}:`, error);
+    throw error;
+  }
 }
