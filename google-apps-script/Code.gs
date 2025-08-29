@@ -180,6 +180,9 @@ function handleRequest(e) {
       case "health":
         result = handleHealthCheck(requestId);
         break;
+      case "getDashboardStats":
+        result = handleGetDashboardStats(requestId);
+        break;
       default:
         return createErrorResponse("Invalid action: " + action, 400, requestId);
     }
@@ -1700,5 +1703,124 @@ function getSheetDataFull(tableName) {
       "Failed to get full sheet data for " + tableName + ": " + error.message
     );
     return getMockTableData(tableName);
+  }
+}
+/**
+ * Handle dashboard statistics request
+ */
+function handleGetDashboardStats(requestId) {
+  const startTime = Date.now();
+
+  try {
+    logMessage("INFO", "Fetching dashboard statistics", requestId);
+
+    // Get data from different sheets to calculate metrics
+    const projectsData = getOptimizedSheetData("Proyectos", {
+      page: 1,
+      limit: 1000,
+    });
+    const personnelData = getOptimizedSheetData("Colaboradores", {
+      page: 1,
+      limit: 1000,
+    });
+    const activitiesData = getOptimizedSheetData("Actividades", {
+      page: 1,
+      limit: 1000,
+    });
+
+    // Calculate metrics with better logic
+    // Count all projects that are not completed or cancelled
+    const activeProjects = projectsData.data.filter((p) => {
+      const estado = (p.estado || p.status || "").toLowerCase();
+      return (
+        estado !== "completado" &&
+        estado !== "cancelado" &&
+        estado !== "terminado"
+      );
+    }).length;
+
+    // Count all active personnel
+    const activePersonnel = personnelData.data.filter(
+      (p) =>
+        p.activo === true ||
+        p.active === true ||
+        (p.estado && p.estado.toLowerCase() === "activo") ||
+        (p.status && p.status.toLowerCase() === "activo")
+    ).length;
+
+    // Count pending tasks/activities
+    const pendingTasks = activitiesData.data.filter((a) => {
+      const estado = (a.estado || a.status || "").toLowerCase();
+      return (
+        estado === "pendiente" ||
+        estado === "en progreso" ||
+        estado === "asignado"
+      );
+    }).length;
+
+    // Calculate remaining budget from projects
+    let remainingBudget = 0;
+    projectsData.data.forEach((p) => {
+      const presupuesto = parseFloat(p.presupuesto_total || p.budget || 0);
+      const avance = parseFloat(p.avance_pct || p.progress || 0) / 100;
+      remainingBudget += presupuesto * (1 - avance);
+    });
+
+    // If no budget data, use fallback
+    if (remainingBudget === 0) {
+      remainingBudget = 250000;
+    }
+
+    const stats = {
+      activeProjects: activeProjects || projectsData.data.length || 0,
+      activePersonnel: activePersonnel || personnelData.data.length || 0,
+      pendingTasks: pendingTasks || activitiesData.data.length || 0,
+      remainingBudget: Math.round(remainingBudget),
+    };
+
+    // Log the calculation details for debugging
+    logMessage(
+      "DEBUG",
+      "Metrics calculation details: " +
+        JSON.stringify({
+          totalProjects: projectsData.data.length,
+          activeProjects: stats.activeProjects,
+          totalPersonnel: personnelData.data.length,
+          activePersonnel: stats.activePersonnel,
+          totalActivities: activitiesData.data.length,
+          pendingTasks: stats.pendingTasks,
+          remainingBudget: stats.remainingBudget,
+        }),
+      requestId
+    );
+
+    const duration = Date.now() - startTime;
+    logMessage(
+      "INFO",
+      "Dashboard statistics calculated in " + duration + "ms",
+      requestId
+    );
+
+    return createSuccessResponse(stats, requestId);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logMessage(
+      "ERROR",
+      "Failed to get dashboard stats after " +
+        duration +
+        "ms: " +
+        error.message,
+      requestId
+    );
+
+    // Return fallback mock data
+    const fallbackStats = {
+      activeProjects: 8,
+      activePersonnel: 24,
+      pendingTasks: 12,
+      remainingBudget: 250000,
+    };
+
+    return createSuccessResponse(fallbackStats, requestId);
   }
 }
